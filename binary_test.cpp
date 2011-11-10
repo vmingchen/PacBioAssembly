@@ -26,20 +26,55 @@
     int
 main ( int argc, char *argv[] )
 { 
-//    const char *pdna = "GGTCGCAATGAAGAAGAGGCGCTGGAAATCTATTTCCTGAGTTGCGCGCGGCTATTGAGATTGACATTTTATGGAGACCG";
     const size_t N = 20000;
     char pdna[N];
     unsigned char binary[4*N];
     char text[N];
+    size_t blen, tlen = 0;
+    FILE *fp = NULL;
 
-//    while (fgets(pdna, N, stdin)) { 
-    while (scanf("%s", pdna) != EOF) { 
-        binary_parser::text2bin(pdna, binary, N);
-        binary_parser::bin2text(binary, text, N);
-        printf("%s\n", text);
+    if (argc < 3) {
+        fprintf(stderr, "usage: %s option filename\n"
+                "options: 0 do in-memory checks for DNA text from stdin\n"
+                "         1 read text input from stdin write to binary file\n"
+                "         2 read binary file write text to stdout\n", argv[0]);
+        return EXIT_FAILURE;
     }
 
-//    printf("%d\n", strcmp(pdna, text));
-//    printf("%s\n%s\n", pdna, text);
+    if (argv[1][0] == '0') {
+        while (scanf("%s", pdna) != EOF) { 
+            blen = binary_parser::text2bin(pdna, binary, N);
+            tlen = binary_parser::bin2text(binary, text, N);
+            if (strcmp(pdna, text) != 0) { 
+                printf("Error:%s\n%s\n", pdna, text);
+                return EXIT_FAILURE;
+            }
+        }
+    }
+
+    if (argv[1][0] == '1') { 
+        fp = fopen(argv[2], "wb");
+        while (scanf("%s", pdna) != EOF) { 
+            blen = binary_parser::text2bin(pdna, binary, N);
+            assert(blen == fwrite(binary, 1, blen, fp));
+            tlen = binary_parser::bin2text(binary, text, N);
+//            printf("%s\n", text);
+        }
+        fclose(fp);
+    }
+
+    if (argv[1][0] == '2') { 
+        fp = fopen(argv[2], "rb");
+        unsigned char *p = binary;
+        while (fread(p, sizeof(unsigned), 1, fp) != 0) {
+            tlen = *((unsigned*)p);
+            blen = sizeof(unsigned) + (tlen+4-1)/4;
+            fread(p + sizeof(unsigned), 1, blen - sizeof(unsigned), fp);
+            assert(tlen == binary_parser::bin2text(p, text, N));
+            printf("%s\n", text);
+        }
+        fclose(fp);
+    }
+
     return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */

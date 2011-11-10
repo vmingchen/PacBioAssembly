@@ -28,7 +28,7 @@ public:
     // convert text file to binary file, return length of result
     static unsigned text2bin(const char *ptext, unsigned char *pbin, unsigned buflen) {
         size_t tlen = strlen(ptext);
-        size_t blen = (tlen+sizeof(unsigned)+4-1)/4; 
+        size_t blen = sizeof(unsigned) + (tlen+4-1)/4; 
         unsigned char *p = pbin;
         
         assert(buflen >= blen);
