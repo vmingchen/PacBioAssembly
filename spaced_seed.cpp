@@ -31,14 +31,26 @@
 // number of sequnce in a byte
 #define N_SEQ_BYTE 4
 
+#define N_SEGMENT 20
 #define N_TRIAL 20
 #define MAX_PAT_LEN 16
 #define TR(x) ((x == 'A') ? 0 : ((X == 'C') ? 1 : (X == 'G' ? 2 : 3)))
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
+#define get_seq_len(x) *((unsigned *)x)
 
 struct Vote {
     unsigned char A, C, G, T;
     Vote() : A(0), C(0), G(0), T(0) {};
+    char get() {
+        if (A > C && A > G && A > T)
+            return 'A';
+        else if (C > A && C > G && C > T)
+            return 'C';
+        else if (G > A && G > C && G > T)
+            return 'G';
+        else
+            return 'T';
+    }
     void add(int c) {
         if (c == 0) 
             A = (A == 255 ? 255 : A+1);
@@ -68,21 +80,56 @@ char *ref_txt = NULL;
 std::map< unsigned, list<size_t> > seedmap;
 // vote against reference sequence
 std::deque<Vote> votes;
+size_t ref_beg;
+size_t ref_end;
+
+typedef std::list<size_t>::iterator lit;
+typedef std::map< unsigned, list<size_t> >::iterator sm_it;
 
 
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  set_ref
- *  Description:  set reference using binary (type 1) or text (type 2)
+ *  Description:  set reference using binary (type 1), 
+ *  text (type 2), 
+ *  or votes (type 3)
  * ===========================================================================
  */
-    bool
+    void
 set_ref ( void *new_ref, int type )
 {
+    size_t tmp;
+
     if (type == 1) {
-
-    } else (type == 2) {
-
+        if (ref_bin != NULL) 
+            free(ref_bin);
+        ref_bin = new_ref;
+        ref_len = get_seq_len(ref_bin);
+        if (ref_txt != NULL)
+            free(ref_txt);
+        if ((ref_txt = malloc(ref_len + 1)) == NULL)
+            handle_error("fail to alloc memory for ref_txt");
+        assert(binary_parser::bin2text(ref_bin, ref_txt, ref_len+1) == ref_len); 
+    } else if (type == 2) {
+        if (ref_txt != NULL)
+            free(ref_txt);
+        ref_txt = new_ref;
+        ref_len = strlen(ref_txt);
+        if (ref_bin != NULL)
+            free(ref_bin);
+        size_t blen = (ref_len+4-1)/4 + sizeof(unsigned);
+        if ((ref_bin = malloc(tmp)) == NULL)
+            handle_error("fail to alloc memory for ref_bin");
+        assert(binary_parser::text2bin(ref_txt, ref_bin, blen) == tmp);
+    } else if (type == 3) {
+        char *ptxt = malloc(votes.size()+1);
+        if (ptxt == NULL)
+            handle_error("fail to alloc memory for string from ptxt");
+        ptxt[votes.size()] = '\0';
+        for (size_t i = 0; i < votes.size(); ++i)
+            ptxt[i] = votes[i].get();
+        ref_offset = 0;
+        set_ref(ptxt, 2);
     }
     return ;
 }		/* -----  end of function set_ref  ----- */
@@ -103,17 +150,39 @@ parse_pattern ( const char *pat )
     return pattern;
 }		/* -----  end of function parse_pattern  ----- */
 
+
 /* 
  * ===  FUNCTION  ============================================================
- *         Name:  seed
+ *         Name:  align_seg
  *  Description:  
  * ===========================================================================
  */
     void
-seed ( const char *pstr )
+align_seg ( const char *seq, size_t sb, size_t se, size_t rb, size_t re )
 {
     return ;
-}		/* -----  end of function seed  ----- */
+}		/* -----  end of function align_seg  ----- */
+
+/* 
+ * ===  FUNCTION  ============================================================
+ *         Name:  align
+ *  Description:  
+ * ===========================================================================
+ */
+    bool
+align ( unsigned char *seq, size_t si, size_t ri, int dir )
+{
+    size_t seq_len = get_seq_len(seq) >> 4;
+    unsigned *pseg = (unsigned*)(seq + sizeof(unsigned));
+    char *ptxt = NULL;
+    
+    while (true) {
+        ssize_t se = si + dir;
+        for (ssize_t dist = 0; dist < N_SEGMENT; ++dist) { 
+        }
+    }
+    return ;
+}		/* -----  end of function align  ----- */
 
 
 /* 
@@ -142,20 +211,14 @@ build_seedmap (  )
  *  Description:  
  * ===========================================================================
  */
-    void
-try_align ( unsigned char *seq, std::list<size_t> &list, size_t pos, int dir)
+    bool
+try_align ( unsigned char *seq, std::list<size_t> &cand, size_t pos, int dir)
 {
-
-//            if (it != indices.end()) {
-//                list<size_t>::iterator beg = it->second.begin();
-//                list<size_t>::iterator end = it->second.end();
-//                while (beg != end) {
-//                    if (align(seq, *beg, j)) break;
-//                    ++beg;
-//                }
-//                break;
-//            }
-    return ;
+    for (lit it = cand.begin(); it != cand.end(); ++it) {
+        if (align(seq, pos, *it, dir)) 
+            return true;
+    }
+    return false;
 }		/* -----  end of function try_align  ----- */
 
 /* 
@@ -208,9 +271,6 @@ main ( int argc, char *argv[] )
     size_t i_max_len, max_len, seq_len;
     unsigned char *seq;
     unsigned *pseg;
-
-    typedef std::list<size_t>::iterator lit;
-    typedef std::map< unsigned, list<size_t> >::iterator sm_it;
 
     if (argc < 3) 
         handle_error("usage: spaced_seed bin seed\n");
