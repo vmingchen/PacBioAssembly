@@ -26,7 +26,7 @@
     int
 main ( int argc, char *argv[] )
 { 
-    const size_t N = 20000;
+    const size_t N = 200000;
     char pdna[N];
     unsigned char binary[4*N];
     char text[N];
@@ -58,7 +58,6 @@ main ( int argc, char *argv[] )
             blen = binary_parser::text2bin(pdna, binary, N);
             assert(blen == fwrite(binary, 1, blen, fp));
             tlen = binary_parser::bin2text(binary, text, N);
-//            printf("%s\n", text);
         }
         fclose(fp);
     }
