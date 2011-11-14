@@ -38,10 +38,10 @@ public:
         *p = 0;
         for (size_t i = 0; i < tlen; ++i) {
             int c = (ptext[i] == 'T') ? 3 : ((ptext[i] == 'G') ? 2 : (ptext[i] == 'C'));
-            int byte_offset = (i & 0x3) << 1;
-            *p |= (c << byte_offset);
-            if (byte_offset == 0x6) *++p = 0; 
+            *p = (*p << 2) | c;
+            if ((i & 0x3) == 0x3) *++p = 0;
         }
+        if (tlen & 3) *p <<= ((4 - (tlen & 3))<<1);
         return blen;
     };
     static unsigned bin2text(const unsigned char *pbin, char *ptext, unsigned buflen) {
@@ -51,7 +51,8 @@ public:
 
         assert(buflen > tlen);
         for (size_t i = 0; i < tlen; ++i) {
-            ptext[i] = codes[(p[i >> 2] >> ((i & 3)<<1)) & 3];
+            ptext[i] = codes[(*p >> ((3 - (i & 3)) << 1)) & 3];
+            if ((i & 0x3) == 0x3) ++p;
         }
         ptext[tlen] = '\0';
 
