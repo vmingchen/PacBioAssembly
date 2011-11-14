@@ -25,23 +25,31 @@
 #include	<vector>
 #include	<deque>
 #include	<list>
-#include	<map>
+#include	<hash_map>
 #include	"binary_parser.h"
+
+#define DBG
 
 // number of sequnce in a word
 #define N_SEQ_WORD 16
 // number of sequnce in a byte
 #define N_SEQ_BYTE 4
 
-#define LOG(...) fprintf(stderr, __VA_ARGS__)
 #define N_SEGMENT 20
-#define N_TRIAL 20
+#define N_TRIAL 5
 #define MAX_PAT_LEN 16
 #define MAX(x, y) (x > y ? x : y)
 #define MIN(x, y) (x < y ? x : y)
 #define TR(x) ((x == 'A') ? 0 : ((x == 'C') ? 1 : (x == 'G' ? 2 : 3)))
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 #define get_seq_len(x) (*((unsigned *)x))
+
+#ifdef DBG
+#define LOG(...) fprintf(stderr, __VA_ARGS__)
+size_t ntrials = 0;
+#else
+#define LOG(...) 
+#endif
 
 enum Op {
     MATCH = 0, INSERT, DELETE 
@@ -89,14 +97,14 @@ t_bseq *ref_bin = NULL;
 char *ref_txt = NULL;
 
 // seedmap for reference sequence
-std::map< unsigned, std::list<size_t> > seedmap;
+__gnu_cxx::hash_map< unsigned, std::list<size_t> > seedmap(1<<20);
 // vote against reference sequence
 std::deque<Vote> votes;
 size_t ref_beg;
 size_t ref_end;
 
 typedef std::list<size_t>::iterator ls_it;
-typedef std::map< unsigned, std::list<size_t> >::iterator sm_it;
+typedef __gnu_cxx::hash_map< unsigned, std::list<size_t> >::iterator sm_it;
 
 
 /* 
@@ -284,41 +292,47 @@ align ( t_bseq *seq, int sb, int rb, int dir )
     
     assert((ptxt = (char*)malloc(seq_len + 1)) != NULL);
     assert(binary_parser::bin2text(seq, ptxt, seq_len+1) == seq_len);
+    // print_substr(ptxt, sb<<4, (sb<<4)+16);
+//    for (size_t i = 0; i < 16; ++i) {
+//        putchar(ptxt[(sb<<4) + i]);
+//    }
+//    putchar('\n');
+
     // find segment of seq, that match segment of reference
-    int dist = 0;
-    do {
-        se += dir;
-        re = match_point(pseg[se], rb, (dist<<4)*dir);
-        if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re)) { 
-            sb = se; 
-            rb = re;
-            match = true;
-        }
-    } while ((++dist<N_SEGMENT || match) && se >= 0 && se <  seq_len_in_word);
-
-    if (match) {
-        if (dir == 1) { 
-            // prefix of seq match suffix of reference
-            if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
-                align_seg(ptxt, sb<<4, ref_len-rb+sb, rb, ref_len);
-                for (int i = ref_len-rb+sb; i < seq_len; ++i)
-                    votes.push_back(Vote(ptxt[i]));
-            } else {
-                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4));
-            }
-        } else { 
-            // suffix of seq match prefix of reference
-            if (sb > rb) {
-                align_seg(ptxt, seq_len-rb, seq_len, 0, sb+1);
-                for (int i = 0; i < seq_len-rb; ++i)
-                    votes.push_front(Vote(ptxt[i]));
-                ref_beg += seq_len-rb;
-            } else {
-                align_seg(ptxt, 0, (sb+1)<<4, rb - ((sb+1)<<4), rb);
-            }
-        }
-    }
-
+//    int dist = 0;
+//    do {
+//        se += dir;
+//        re = match_point(pseg[se], rb, (dist<<4)*dir);
+//        if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re)) { 
+//            sb = se; 
+//            rb = re;
+//            match = true;
+//        }
+//    } while ((++dist<N_SEGMENT || match) && se >= 0 && se <  seq_len_in_word);
+//
+//    if (match) {
+//        if (dir == 1) { 
+//            // prefix of seq match suffix of reference
+//            if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
+//                align_seg(ptxt, sb<<4, ref_len-rb+sb, rb, ref_len);
+//                for (int i = ref_len-rb+sb; i < seq_len; ++i)
+//                    votes.push_back(Vote(ptxt[i]));
+//            } else {
+//                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4));
+//            }
+//        } else { 
+//            // suffix of seq match prefix of reference
+//            if (sb > rb) {
+//                align_seg(ptxt, seq_len-rb, seq_len, 0, sb+1);
+//                for (int i = 0; i < seq_len-rb; ++i)
+//                    votes.push_front(Vote(ptxt[i]));
+//                ref_beg += seq_len-rb;
+//            } else {
+//                align_seg(ptxt, 0, (sb+1)<<4, rb - ((sb+1)<<4), rb);
+//            }
+//        }
+//    }
+//
     free(ptxt);
     return match;
 }		/* -----  end of function align  ----- */
@@ -339,7 +353,9 @@ build_seedmap (  )
     for (size_t i = 0; i < nseed; ++i) {
         size_t j = ((i & 0xf) << 1);
         size_t tmp = (*pseg << j) & (*(pseg+1) >> (32-j));
-        seedmap[(seed & tmp)].push_back(i);
+        size_t key = seed & tmp;
+        // there are a lot of 'AAAAAAAAAAAAAAAA' segments, ignore them
+        if (key) seedmap[key].push_back(i);
     }
 }		/* -----  end of function build_seedmap  ----- */
 
@@ -352,6 +368,8 @@ build_seedmap (  )
     bool
 try_align ( t_bseq *seq, std::list<size_t> &cand, size_t pos, int dir)
 {
+#ifdef DBG
+#endif
     for (ls_it it = cand.begin(); it != cand.end(); ++it) {
         if (align(seq, pos, *it, dir)) 
             return true;
@@ -417,6 +435,8 @@ main ( int argc, char *argv[] )
     i_max_len = open_binary(argv[1], indices);
     // set the longest DNA sequence as initial reference
     set_ref(buf+i_max_len, 1);
+    LOG("indices: size %d\n", indices.size());
+    LOG("ref_len: %d\n", ref_len);
 
     // parse spaced seed
     seed = parse_pattern(argv[2]);
@@ -424,9 +444,11 @@ main ( int argc, char *argv[] )
 
     // build seedmap for reference sequences (the longest sequence)
     build_seedmap();
+    LOG("seedmap done\n");
 
     // find repeat
-    for (ls_it it = indices.begin(); it != indices.end(); ) {
+    int count = 0;
+    for (ls_it it = indices.begin(); it != indices.end(); ++it) {
         if (*it == i_max_len) continue;
         seq = buf + *it;
         pseg = (unsigned*)(seq + sizeof(unsigned));
@@ -434,7 +456,7 @@ main ( int argc, char *argv[] )
         bool found = false;
         // number of trial 
         for (size_t j = 0; j < MAX(seq_len, N_TRIAL); ++j) {
-            sm_it it = seedmap.find(pseg[j]);
+            sm_it it = seedmap.find(pseg[j] & seed);
             if (it != seedmap.end() && try_align(seq, it->second, j, 1)) { 
                 found = true;
                 break;
@@ -446,9 +468,11 @@ main ( int argc, char *argv[] )
                 break;
             }
         }
-        it = found ? indices.erase(it) : ++it;
+        if (found) LOG("found %d\n", count);
+//        else ++it;
+//        it = found ? indices.erase(it) : ++it;
+        if (!(++count & 0xFFF)) LOG("%d sequences processed\n", count);
     }
-    free(buf);
 
     return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
