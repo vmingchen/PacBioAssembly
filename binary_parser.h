@@ -15,6 +15,14 @@
 #define BINARY_PARSER_H
 #include	<assert.h>
 
+#define TR(x) ((x == 'A') ? 0 : ((x == 'C') ? 1 : (x == 'G' ? 2 : 3)))
+
+// number of sequnce in a word
+#define N_SEQ_WORD 16
+// number of sequnce in a byte
+#define N_SEQ_BYTE 4
+
+
 class binary_parser {
 public:
 //    // create binary file from text file 
@@ -25,6 +33,19 @@ public:
     bool empty(){ return true; };
     // read a record from the binary
     const unsigned* read(unsigned *plen) const { return NULL; };
+    static unsigned encode(const char *ptext) {
+        unsigned tseg = 0;
+        unsigned char *t = (unsigned char*)&tseg;
+        char *p = ptext;
+        for (size_t j = 0; j < N_SEQ_WORD; ++j, ++p) {
+            *t = (*t << 2) | TR(*p);
+            if ((j & 0x3) == 0x3) ++t;
+        }
+        return tseg;
+    }
+    static void decode(unsigned code, char *ptext) {
+
+    }
     // convert text file to binary file, return length of result
     static unsigned text2bin(const char *ptext, unsigned char *pbin, unsigned buflen) {
         size_t tlen = strlen(ptext);
@@ -57,6 +78,20 @@ public:
         ptext[tlen] = '\0';
 
         return tlen;
+    }
+private:
+    static unsigned char t2b(const char *pt, size_t tlen) {
+        unsigned char b = 0;
+        if (tlen == 1) {
+            b = TR(pt[0]) << 6;
+        } else if (tlen == 2) {
+            b = TR(pt[0]) << 6 | TR(pt[1]) << 4;
+        } else if (tlen == 3) {
+            b = TR(pt[0]) << 6 | TR(pt[1]) << 4 | TR(pt[2]) << 2;
+        } else {    // tlen >= 4
+            b = TR(pt[0]) << 6 | TR(pt[1]) << 4 | TR(pt[2]) << 2 | TR(pt[3]);
+        }
+        return b;
     }
 };
 

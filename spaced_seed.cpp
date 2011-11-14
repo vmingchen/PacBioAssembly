@@ -30,17 +30,11 @@
 
 #define DBG
 
-// number of sequnce in a word
-#define N_SEQ_WORD 16
-// number of sequnce in a byte
-#define N_SEQ_BYTE 4
-
 #define N_SEGMENT 50
 #define N_TRIAL 10
 #define MAX_PAT_LEN 16
 #define MAX(x, y) (x > y ? x : y)
 #define MIN(x, y) (x < y ? x : y)
-#define TR(x) ((x == 'A') ? 0 : ((x == 'C') ? 1 : (x == 'G' ? 2 : 3)))
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 #define get_seq_len(x) (*((unsigned *)x))
 
@@ -106,6 +100,8 @@ size_t ref_end;
 
 typedef std::list<size_t>::iterator ls_it;
 typedef __gnu_cxx::hash_map< unsigned, std::list<size_t> >::iterator sm_it;
+
+inline void swap(size_t &a, size_t &b) { size_t t = a; a = b; b = t; }
 
 
 /* 
@@ -210,6 +206,16 @@ build_seedmap (  )
         }
 //        LOG("%08x\n", tseg);
         if (seed & tseg) seedmap[seed & tseg].push_back(i);
+#ifdef DBG
+        if (seed & tseg) {
+            tseg &= seed;
+            *t = (unsigned char*)&tseg;
+            for (size_t j = 0; j < N_SEQ_WORD; ++j) {
+                *t = (*t >> ((3-(j&0x3))<<1)) & 3;
+                if ((j & 0x3) == 0x3) ++t;
+            }
+        }
+#endif
     }
 
 //    for (size_t i = N_SEQ_WORD; i < ref_len; ++i) {
@@ -234,17 +240,19 @@ match_point ( unsigned sv, int base, int dist )
 {
     int mp = 0;
     int diff = ref_len;
-    int nd;
     sm_it it = seedmap.find(sv & seed);
     if (it == seedmap.end()) 
         return -1;
     for (ls_it it1 = it->second.begin(); it1 != it->second.end(); ++it1) {
-        if ((nd = abs(*it1 - base - dist)) < diff) {
+        LOG("offset: %d, base: %d, dist: %d\n", *it1, base, dist);
+        int nd = abs(*it1 - base - dist);
+        if (nd <= 4*abs(dist) && nd < diff) {
             diff = nd;
             mp = *it1;
         }
     }
-    return mp;
+    LOG("selected: %d\n", mp);
+    return diff == ref_len ? -1 : mp;
 }		/* -----  end of function match_point  ----- */
 
 /* 
@@ -256,13 +264,11 @@ match_point ( unsigned sv, int base, int dist )
     bool
 align_seg ( const char *txt, size_t sb, size_t se, size_t rb, size_t re )
 {
-    sb = MIN(sb, se);
-    se = MAX(sb, se);
-    rb = MIN(rb, re);
-    re = MAX(rb, re);
+    if (se < sb) swap(sb, se);
+    if (re < rb) swap(rb, re);
 
-    int slen = se - sb + 1;
-    int rlen = re - rb + 1;
+    int slen = se - sb;
+    int rlen = re - rb;
 
     const char *ptxt = txt + sb;
     const char *pref = ref_txt + rb;
@@ -343,25 +349,26 @@ align ( t_bseq *seq, int sb, int rb, int dir )
 #endif
 
     // find segment of seq, that match segment of reference
-    int dist = 0;
+    int dist = 1;
     do {
         se += dir;
         re = match_point(pseg[se], rb, (dist<<4)*dir);
         if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re)) { 
             sb = se; 
             rb = re;
+            dist = 0;
             match = true;
         }
     } while ((++dist<N_SEGMENT || match) && se > 0 && se < seq_len_in_word);
 
-    /*
+    /* 
     if (match) {
         if (dir == 1) { 
             // prefix of seq match suffix of reference
             if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
                 align_seg(ptxt, sb<<4, ref_len-rb+sb, rb, ref_len);
-                for (int i = ref_len-rb+sb; i < seq_len; ++i)
-                    votes.push_back(Vote(ptxt[i]));
+//                for (int i = ref_len-rb+sb; i < seq_len; ++i)
+//                    votes.push_back(Vote(ptxt[i]));
             } else {
                 align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4));
             }
@@ -369,15 +376,14 @@ align ( t_bseq *seq, int sb, int rb, int dir )
             // suffix of seq match prefix of reference
             if (sb > rb) {
                 align_seg(ptxt, seq_len-rb, seq_len, 0, sb+1);
-                for (int i = 0; i < seq_len-rb; ++i)
-                    votes.push_front(Vote(ptxt[i]));
+//                for (int i = 0; i < seq_len-rb; ++i)
+//                    votes.push_front(Vote(ptxt[i]));
                 ref_beg += seq_len-rb;
             } else {
                 align_seg(ptxt, 0, (sb+1)<<4, rb - ((sb+1)<<4), rb);
             }
         }
-    }
-    */
+    }  */
 
     free(ptxt);
     return match;
