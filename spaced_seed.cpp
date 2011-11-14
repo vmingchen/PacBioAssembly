@@ -53,7 +53,7 @@ enum Op {
 struct Vote {
     unsigned char A, C, G, T;
     Vote() : A(0), C(0), G(0), T(0) {};
-    Vote(char c) { add(TR(c)); };
+    Vote(char c) { add(C2I(c)); };
     char get() {
         if (A > C && A > G && A > T)
             return 'A';
@@ -190,43 +190,16 @@ parse_pattern ( const char *pat )
     void
 build_seedmap (  )
 {
-    unsigned tseg = 0;
     unsigned nseed = ref_len - N_SEQ_WORD;
 
     LOG("nseed: %d\n", nseed);
     seedmap.clear();
 
     for (size_t i = 0; i < nseed; ++i) {
-        tseg = 0;
-        unsigned char *t = (unsigned char*)&tseg;
-        char *p = ref_txt + i;
-        for (size_t j = 0; j < N_SEQ_WORD; ++j, ++p) {
-            *t = (*t << 2) | TR(*p);
-            if ((j & 0x3) == 0x3) ++t;
-        }
-//        LOG("%08x\n", tseg);
+        unsigned tseg = binary_parser::encode(ref_txt + i);
+        // there are a lot of 'AAAAAAAAAAAAAAAA' segments, ignore them
         if (seed & tseg) seedmap[seed & tseg].push_back(i);
-#ifdef DBG
-        if (seed & tseg) {
-            tseg &= seed;
-            *t = (unsigned char*)&tseg;
-            for (size_t j = 0; j < N_SEQ_WORD; ++j) {
-                *t = (*t >> ((3-(j&0x3))<<1)) & 3;
-                if ((j & 0x3) == 0x3) ++t;
-            }
-        }
-#endif
     }
-
-//    for (size_t i = N_SEQ_WORD; i < ref_len; ++i) {
-//        size_t j = ((i & 0xf) << 1);
-//        size_t tmp = (*pseg << j) | (*(pseg+1) >> (32-j));
-//        size_t key = seed & tmp;
-//        LOG("%08x\n", tmp);
-//        // there are a lot of 'AAAAAAAAAAAAAAAA' segments, ignore them
-//        if (key) seedmap[key].push_back(i);
-//        if ((i & 0xf) == 0xf) ++pseg;
-//    }
 }		/* -----  end of function build_seedmap  ----- */
 
 /* 
@@ -275,8 +248,8 @@ align_seg ( const char *txt, size_t sb, size_t se, size_t rb, size_t re )
 
 #ifdef DBG
     LOG("segment(%d, %d), reference(%d, %d)\n", sb, slen, rb, rlen);
-    print_substr(txt, sb, se);
-    print_substr(ref_txt, rb, re);
+//    print_substr(txt, sb, se);
+//    print_substr(ref_txt, rb, re);
 #endif
 
     /* 
