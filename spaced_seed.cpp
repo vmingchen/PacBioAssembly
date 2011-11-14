@@ -195,23 +195,22 @@ parse_pattern ( const char *pat )
 build_seedmap (  )
 {
     unsigned tseg = 0;
-    unsigned key = 0;
     unsigned nseed = ref_len - N_SEQ_WORD;
-    char *p = ref_txt;
-    size_t i;
 
-    LOG("ref: %s\n", ref_txt);
+    LOG("nseed: %d\n", nseed);
     seedmap.clear();
-    for (i = 0; i < N_SEQ_WORD; ++i) {
-        tseg = (tseg << 2) | TR(*p++);
-    }
 
-    i = 0;
-    do {
-        LOG("%08x\n", tseg);
+    for (size_t i = 0; i < nseed; ++i) {
+        tseg = 0;
+        unsigned char *t = (unsigned char*)&tseg;
+        char *p = ref_txt + i;
+        for (size_t j = 0; j < N_SEQ_WORD; ++j, ++p) {
+            *t = (*t << 2) | TR(*p);
+            if ((j & 0x3) == 0x3) ++t;
+        }
+//        LOG("%08x\n", tseg);
         if (seed & tseg) seedmap[seed & tseg].push_back(i);
-        tseg = (tseg << 2) | TR(*p++);
-    } while (++i < nseed);
+    }
 
 //    for (size_t i = N_SEQ_WORD; i < ref_len; ++i) {
 //        size_t j = ((i & 0xf) << 1);
@@ -480,10 +479,15 @@ main ( int argc, char *argv[] )
         seq = buf + *it;
         pseg = (unsigned*)(seq + sizeof(unsigned));
         seq_len = (*((unsigned*)seq) >> 4); // seq length in 32-word
+        if (seq_len == 0) {
+            LOG("segment too short! length: %d\n", get_seq_len(seq));
+            continue;
+        }
         bool found = false;
         // number of trial 
-        for (size_t j = 0; j < MAX(seq_len, N_TRIAL); ++j) {
+        for (size_t j = 0; j < MIN(seq_len, N_TRIAL); ++j) {
             sm_it it = seedmap.find(pseg[j] & seed);
+//            LOG("%08x\n", pseg[j]);
             if (it != seedmap.end() && try_align(seq, it->second, j, 1)) { 
 #ifdef DBG
                 ++_nmatches;
@@ -501,7 +505,7 @@ main ( int argc, char *argv[] )
                 break;
             }
         }
-        if (found) LOG("found %d\n", count);
+        if (found) LOG("found %d\n", count+1);
 //        else ++it;
 //        it = found ? indices.erase(it) : ++it;
         if (!(++count & 0xFFF)) LOG("%d sequences processed\n", count);
