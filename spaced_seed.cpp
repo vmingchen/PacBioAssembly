@@ -30,6 +30,7 @@
 #include	"binary_parser.h"
 #include	"common.h"
 
+#define STRONG 5
 #define N_SEGMENT 50
 #define N_TRIAL 10
 #define MAX_PAT_LEN N_SEQ_WORD
@@ -109,7 +110,7 @@ inline void swap(int &a, int &b) { int t = a; a = b; b = t; }
 print_substr ( const char *pseq, int beg, int end )
 {
     char fmt[20];
-
+    if (beg > end) swap(beg, end);
     sprintf(fmt, "%%.%ds\n", end-beg);
     printf(fmt, pseq+beg);
 }		/* -----  end of function print substr  ----- */
@@ -294,8 +295,8 @@ align_seg ( const char *txt, int sb, int se, int rb, int re, int dir)
 
 #ifdef DBG
 //    LOG("segment(%d, %d), reference(%d, %d)\n", sb, slen, rb, rlen);
-    print_substr(txt, sb, se);
-    print_substr(ref_txt, rb, re);
+//    print_substr(txt, sb, se);
+//    print_substr(ref_txt, rb, re);
 #endif
 
     if (filter_seq(ptxt, slen, pref, rlen)) return false;
@@ -395,26 +396,30 @@ align ( t_bseq *seq, int ap_s, int ap_r, int dir )
     if (!mismatch && n_matched_seg > 0) {
         if (dir == 1) { 
             // prefix of seq match suffix of reference
-            if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
+            if ((seq_len-(sb<<4)) > (ref_len-rb) && n_matched_seg > STRONG) {  
                 align_seg(ptxt, sb<<4, ref_len-rb+(sb<<4), rb, ref_len, dir);
 //                for (int i = ref_len-rb+sb; i < seq_len; ++i)
 //                    votes.push_back(Vote(ptxt[i]));
+                print_substr(ptxt, ref_len-rb+(sb<<4), seq_len);
             } else {
                 align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4), dir);
             }
         } else { 
             // suffix of seq match prefix of reference
-            if ((sb<<4) > rb) {
+            if ((sb<<4) > rb && n_matched_seg > STRONG) {
                 align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16, dir);
 //                for (int i = 0; i < seq_len-rb; ++i)
 //                    votes.push_front(Vote(ptxt[i]));
+                print_substr(ptxt, 0, (sb<<4)+16);
                 ref_beg += seq_len-rb;
             } else {
                 align_seg(ptxt, 0, (sb<<4)+16, rb-(sb<<4), rb+16, dir);
             }
         }
 #ifdef DBG
-                ++_nmatches;
+        ++_nmatches;
+        print_substr(ptxt, ap_s, se);
+        print_substr(ref_txt, ap_r, re);
 #endif
     }  
 
@@ -428,13 +433,18 @@ align ( t_bseq *seq, int ap_s, int ap_r, int dir )
  *  Description:  
  * ===========================================================================
  */
-    bool
-try_align ( t_bseq *seq, std::list<size_t> &cand, size_t pos, int dir)
+    inline bool
+try_align ( const t_bseq *seq, size_t pos, int dir)
 {
+    unsigned *pseg = (unsigned*)(seq + sizeof(unsigned));
+    sm_it sit = seedmap.find(pseg[pos] & seed);
+    if (sit == seedmap.end()) return false;
+
 #ifdef DBG
     ++_ntrials;
 #endif
-    for (ls_it it = cand.begin(); it != cand.end(); ++it) {
+
+    for (ls_it it = sit->begin(); it != sit->end(); ++it) {
         if (align(seq, pos, *it, dir)) 
             return true;
     }
@@ -525,10 +535,12 @@ main ( int argc, char *argv[] )
         bool found = false;
         // number of trial 
         for (size_t j = 0; j < MIN(seq_len, N_TRIAL); ++j) {
-            sm_it it = seedmap.find(pseg[j] & seed);
-            if (it != seedmap.end() && try_align(seq, it->second, j, 1)) { 
+            if (try_align(seq, j, 1) || try_align(seq, seq_len-j-1, 1)) {
                 found = true;
                 break;
+            }
+            sm_it it = seedmap.find(pseg[j] & seed);
+            if (it != seedmap.end() && try_align(seq, it->second, j, 1)) { 
             }
             it = seedmap.find(pseg[seq_len-j-1] & seed);
             if (it != seedmap.end() && try_align(seq, it->second, 
