@@ -223,7 +223,7 @@ filter_seq ( const char *pa, int la, const char *pb, int lb )
         + abs(stats[0][2] - stats[1][2]) 
         + abs(stats[0][3] - stats[1][3]);
 
-    return (diff*8) > (la + lb);
+    return (diff*4) > (la + lb);
 }		/* -----  end of function filter_seq  ----- */
 
 /* 
@@ -298,7 +298,7 @@ align_seg ( const char *txt, int sb, int se, int rb, int re, int dir)
     print_substr(ref_txt, rb, re);
 #endif
 
-//    if (filter_seq(ptxt, slen, pref, rlen)) return false;
+    if (filter_seq(ptxt, slen, pref, rlen)) return false;
 
 //    slen += 1;
 //    rlen += 1;
@@ -392,37 +392,34 @@ align ( t_bseq *seq, int ap_s, int ap_r, int dir )
         }
     } while (!mismatch && se > 0 && se < seq_len_in_word);
 
+    if (!mismatch && n_matched_seg > 0) {
+        if (dir == 1) { 
+            // prefix of seq match suffix of reference
+            if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
+                align_seg(ptxt, sb<<4, ref_len-rb+(sb<<4), rb, ref_len, dir);
+//                for (int i = ref_len-rb+sb; i < seq_len; ++i)
+//                    votes.push_back(Vote(ptxt[i]));
+            } else {
+                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4), dir);
+            }
+        } else { 
+            // suffix of seq match prefix of reference
+            if ((sb<<4) > rb) {
+                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16, dir);
+//                for (int i = 0; i < seq_len-rb; ++i)
+//                    votes.push_front(Vote(ptxt[i]));
+                ref_beg += seq_len-rb;
+            } else {
+                align_seg(ptxt, 0, (sb<<4)+16, rb-(sb<<4), rb+16, dir);
+            }
+        }
 #ifdef DBG
+                ++_nmatches;
 #endif
-
-//    if (!mismatch) {
-//        if (dir == 1) { 
-//            // prefix of seq match suffix of reference
-//            if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
-//                align_seg(ptxt, sb<<4, ref_len-rb+sb, rb, ref_len);
-////                for (int i = ref_len-rb+sb; i < seq_len; ++i)
-////                    votes.push_back(Vote(ptxt[i]));
-//            } else {
-//                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4));
-//            }
-//        } else { 
-//            // suffix of seq match prefix of reference
-//            if ((sb<<4) > rb) {
-//                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16);
-////                for (int i = 0; i < seq_len-rb; ++i)
-////                    votes.push_front(Vote(ptxt[i]));
-//                ref_beg += seq_len-rb;
-//            } else {
-//                align_seg(ptxt, 0, (sb<<4)+16, rb - (sb<<4), rb+16);
-//            }
-//        }
-//#ifdef DBG
-//                ++_nmatches;
-//#endif
-//    }  
+    }  
 
     free(ptxt);
-    return !mismatch;
+    return !mismatch && n_matched_seg > 0;
 }		/* -----  end of function align  ----- */
 
 /* 
@@ -540,7 +537,7 @@ main ( int argc, char *argv[] )
                 break;
             }
         }
-//        if (found) LOG("found %d\n", count+1);
+        if (found) LOG("found %d\n", count+1);
 //        else ++it;
 //        it = found ? indices.erase(it) : ++it;
         if (!(++count & 0xFFF)) LOG("%d sequences processed\n", count);
