@@ -30,7 +30,6 @@
 #include	"binary_parser.h"
 #include	"common.h"
 
-
 #define N_SEGMENT 50
 #define N_TRIAL 10
 #define MAX_PAT_LEN N_SEQ_WORD
@@ -97,7 +96,7 @@ size_t ref_end;
 typedef std::list<size_t>::iterator ls_it;
 typedef __gnu_cxx::hash_map< unsigned, std::list<size_t> >::iterator sm_it;
 
-inline void swap(size_t &a, size_t &b) { size_t t = a; a = b; b = t; }
+inline void swap(int &a, int &b) { int t = a; a = b; b = t; }
 
 
 /* 
@@ -204,6 +203,29 @@ build_seedmap (  )
     }
 }		/* -----  end of function build_seedmap  ----- */
 
+
+/* 
+ * ===  FUNCTION  ============================================================
+ *         Name:  filter_seq
+ *  Description:  return true if pa and pb are not likely to be similar
+ * ===========================================================================
+ */
+    bool
+filter_seq ( const char *pa, int la, const char *pb, int lb )
+{
+    int stats[2][4] = {{0, 0, 0, 0}, {0, 0, 0, 0}};
+
+    for (int i = 0; i < la; ++i, ++pa) ++stats[0][C2I(*pa)];
+    for (int i = 0; i < lb; ++i, ++pb) ++stats[1][C2I(*pb)];
+
+    int diff = abs(stats[0][0] - stats[1][0]) 
+        + abs(stats[0][1] - stats[1][1]) 
+        + abs(stats[0][2] - stats[1][2]) 
+        + abs(stats[0][3] - stats[1][3]);
+
+    return (diff*8) > (la + lb);
+}		/* -----  end of function filter_seq  ----- */
+
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  match_point
@@ -216,7 +238,7 @@ match_point ( unsigned sv, int base, int dist )
     int mp = 0;
     int diff = ref_len;
 
-    if (abs(dist) > 2000) return -1;
+    if (abs(dist) > 800) return -1;
 
     sm_it it = seedmap.find(sv & seed);
 #ifdef NDBG
@@ -245,8 +267,22 @@ match_point ( unsigned sv, int base, int dist )
  * ===========================================================================
  */
     bool
-align_seg ( const char *txt, size_t sb, size_t se, size_t rb, size_t re )
+align_seg ( const char *txt, int sb, int se, int rb, int re, int dir)
 {
+#ifdef NDBG
+    sb = sb + ((1 - dir) << 3);
+    se = se + ((1 + dir) << 3);
+    rb = rb + ((1 - dir) << 3);
+    re = re + ((1 + dir) << 3);
+#endif
+
+    if (dir == -1) {
+        sb += 16;
+        se += 16;
+        rb += 16;
+        re += 16;
+    }
+
     if (se < sb) swap(sb, se);
     if (re < rb) swap(rb, re);
 
@@ -262,32 +298,36 @@ align_seg ( const char *txt, size_t sb, size_t se, size_t rb, size_t re )
     print_substr(ref_txt, rb, re);
 #endif
 
+//    if (filter_seq(ptxt, slen, pref, rlen)) return false;
+
+//    slen += 1;
+//    rlen += 1;
+//    std::vector< std::vector<int> > m(slen, std::vector<int>(rlen, ref_len)); 
+//
+//    for (int i = 0; i < slen; ++i) m[i][0] = i;
+//    for (int j = 0; j < rlen; ++j) m[0][j] = j;
+//
+//    for (int i = 1; i < slen; ++i) {
+//        for (int j = 1; j < rlen; ++j) {
+//            int vm = m[i-1][j-1] + (1 - (ptxt[i-1] == pref[j-1]));
+//            int vd = m[i][j-1] + 1;
+//            int vi = m[i-1][j] + 1;
+//            if (vm < vd && vm < vi) {
+//                m[i][j] = vm;
+//            } 
+//            if (vd < vm && vd < vi) {
+//                m[i][j] = vd;
+//            }
+//            if (vi < vd && vi < vm) {
+//                m[i][j] = vi;
+//            }
+//        }
+//    }
+//
+//    if (m[slen-1][rlen-1] > 0.3*rlen) 
+//        return false;
+
     /* 
-    std::vector< std::vector<int> > m(slen, std::vector<int>(rlen, ref_len)); 
-
-    for (int i = 0; i < slen; ++i) m[i][0] = i;
-    for (int j = 0; j < rlen; ++j) m[0][j] = j;
-
-    for (int i = 1; i < slen; ++i) {
-        for (int j = 1; j < rlen; ++j) {
-            int vm = m[i-1][j-1] + (1 - (ptxt[i-1] == pref[j-1]));
-            int vd = m[i][j-1] + 1;
-            int vi = m[i-1][j] + 1;
-            if (vm < vd && vm < vi) {
-                m[i][j] = vm;
-            } 
-            if (vd < vm && vd < vi) {
-                m[i][j] = vd;
-            }
-            if (vi < vd && vi < vm) {
-                m[i][j] = vi;
-            }
-        }
-    }
-
-    if (m[slen-1][rlen-1] > 0.3*rlen) 
-        return false;
-
     int x = slen - 1;
     int y = rlen - 1;
     while (x > 0 && y > 0) {
@@ -310,68 +350,76 @@ align_seg ( const char *txt, size_t sb, size_t se, size_t rb, size_t re )
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  align
- *  Description:  
+ *  Description:  ap_s, aligned point in segment, against ap_r in reference
  * ===========================================================================
  */
     bool
-align ( t_bseq *seq, int sb, int rb, int dir )
+align ( t_bseq *seq, int ap_s, int ap_r, int dir )
 {
     int seq_len = get_seq_len(seq);
     int seq_len_in_word = seq_len / N_SEQ_WORD;
     unsigned *pseg = (unsigned*)(seq + sizeof(unsigned));
     char *ptxt = NULL;
-    bool mismatch = true;
-    size_t n_matched_seg = 0;
-    size_t l_matched_seg = 0;
-    int se = sb, re;
+    bool mismatch = false;
+    size_t n_matched_seg = 0;       
+    size_t l_matched_seg = 0;       // length of aligned segments in word
+    int sb, rb, se, re; 
 
     assert((ptxt = (char*)malloc(seq_len + 1)) != NULL);
     assert(binary_parser::bin2text(seq, ptxt, seq_len+1) == seq_len);
 
     // find segment of seq, that match segment of reference
-    int dist = 1;
+    se = sb = ap_s;
+    rb = ap_r;
+    int dist = 0;
     do {
+        ++dist;
         se += dir;
         re = match_point(pseg[se], rb, (dist<<4)*dir);
-        if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re)) { 
+        if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re, dir)) { 
             sb = se; 
             rb = re;
             dist = 0;
-            l_matched_seg += (abs(se - sb)<<4);
+            l_matched_seg += abs(se - sb);
             ++n_matched_seg;
-        } else {
+        } 
 
+        if (dist > N_SEGMENT) {  
+            if (8*l_matched_seg < abs(se - ap_s)) 
+                mismatch = true;
+            else
+                sb = se;
         }
-    } while ((++dist<N_SEGMENT || !mismatch) && se > 0 && se < seq_len_in_word);
+    } while (!mismatch && se > 0 && se < seq_len_in_word);
 
 #ifdef DBG
 #endif
 
-    if (!mismatch) {
-        if (dir == 1) { 
-            // prefix of seq match suffix of reference
-            if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
-                align_seg(ptxt, sb<<4, ref_len-rb+sb, rb, ref_len);
-//                for (int i = ref_len-rb+sb; i < seq_len; ++i)
-//                    votes.push_back(Vote(ptxt[i]));
-            } else {
-                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4));
-            }
-        } else { 
-            // suffix of seq match prefix of reference
-            if ((sb<<4) > rb) {
-                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16);
-//                for (int i = 0; i < seq_len-rb; ++i)
-//                    votes.push_front(Vote(ptxt[i]));
-                ref_beg += seq_len-rb;
-            } else {
-                align_seg(ptxt, 0, (sb<<4)+16, rb - (sb<<4), rb+16);
-            }
-        }
-#ifdef DBG
-                ++_nmatches;
-#endif
-    }  
+//    if (!mismatch) {
+//        if (dir == 1) { 
+//            // prefix of seq match suffix of reference
+//            if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
+//                align_seg(ptxt, sb<<4, ref_len-rb+sb, rb, ref_len);
+////                for (int i = ref_len-rb+sb; i < seq_len; ++i)
+////                    votes.push_back(Vote(ptxt[i]));
+//            } else {
+//                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4));
+//            }
+//        } else { 
+//            // suffix of seq match prefix of reference
+//            if ((sb<<4) > rb) {
+//                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16);
+////                for (int i = 0; i < seq_len-rb; ++i)
+////                    votes.push_front(Vote(ptxt[i]));
+//                ref_beg += seq_len-rb;
+//            } else {
+//                align_seg(ptxt, 0, (sb<<4)+16, rb - (sb<<4), rb+16);
+//            }
+//        }
+//#ifdef DBG
+//                ++_nmatches;
+//#endif
+//    }  
 
     free(ptxt);
     return !mismatch;
