@@ -26,24 +26,20 @@
 #include	<deque>
 #include	<list>
 #include	<hash_map>
-#include	"binary_parser.h"
 
-#define DBG
+#include	"binary_parser.h"
+#include	"common.h"
+
 
 #define N_SEGMENT 50
 #define N_TRIAL 10
-#define MAX_PAT_LEN 16
-#define MAX(x, y) (x > y ? x : y)
-#define MIN(x, y) (x < y ? x : y)
+#define MAX_PAT_LEN N_SEQ_WORD
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 #define get_seq_len(x) (*((unsigned *)x))
 
 #ifdef DBG
-#define LOG(...) fprintf(stderr, __VA_ARGS__)
 size_t _ntrials = 0;
 size_t _nmatches = 0;
-#else
-#define LOG(...) 
 #endif
 
 enum Op {
@@ -173,11 +169,17 @@ set_ref ( void *new_ref, int type )
     unsigned
 parse_pattern ( const char *pat )
 {
-    unsigned pattern = 0;
-    for (size_t i = 0; i < strlen(pat) && i < MAX_PAT_LEN; ++i) {
-        pattern = (pat[i] == '1') ? ((pattern << 2) | 0x3) : (pattern << 2);
-    }
-    return pattern;
+    char dnapat[MAX_PAT_LEN+1] = "AAAAAAAAAAAAAAAA";
+    size_t len = MIN(strlen(pat), MAX_PAT_LEN);
+
+#ifdef DBG
+    if (len < MAX_PAT_LEN) 
+        LOG("WARNING: pattern is shorter than %d\n", MAX_PAT_LEN);
+#endif
+
+    for (size_t i = 0; i < len; ++i) 
+        dnapat[i] = (pat[i] == '1' ? 'T' : 'A');
+    return binary_parser::encode(dnapat);
 }		/* -----  end of function parse_pattern  ----- */
 
 
@@ -213,18 +215,26 @@ match_point ( unsigned sv, int base, int dist )
 {
     int mp = 0;
     int diff = ref_len;
+
+    if (abs(dist) > 2000) return -1;
+
     sm_it it = seedmap.find(sv & seed);
+#ifdef NDBG
+    char seg[N_SEQ_WORD];
+    binary_parser::decode(sv & seed, seg);
+    LOG("%.16s\n", seg);
+#endif
     if (it == seedmap.end()) 
         return -1;
     for (ls_it it1 = it->second.begin(); it1 != it->second.end(); ++it1) {
-        LOG("offset: %d, base: %d, dist: %d\n", *it1, base, dist);
+//        LOG("offset: %d, base: %d, dist: %d\n", *it1, base, dist);
         int nd = abs(*it1 - base - dist);
-        if (nd <= 4*abs(dist) && nd < diff) {
+        if (4*nd <= abs(dist) && nd < diff) {
             diff = nd;
             mp = *it1;
         }
     }
-    LOG("selected: %d\n", mp);
+//    LOG("selected: %d\n", mp);
     return diff == ref_len ? -1 : mp;
 }		/* -----  end of function match_point  ----- */
 
@@ -247,9 +257,9 @@ align_seg ( const char *txt, size_t sb, size_t se, size_t rb, size_t re )
     const char *pref = ref_txt + rb;
 
 #ifdef DBG
-    LOG("segment(%d, %d), reference(%d, %d)\n", sb, slen, rb, rlen);
-//    print_substr(txt, sb, se);
-//    print_substr(ref_txt, rb, re);
+//    LOG("segment(%d, %d), reference(%d, %d)\n", sb, slen, rb, rlen);
+    print_substr(txt, sb, se);
+    print_substr(ref_txt, rb, re);
 #endif
 
     /* 
@@ -310,16 +320,13 @@ align ( t_bseq *seq, int sb, int rb, int dir )
     int seq_len_in_word = seq_len / N_SEQ_WORD;
     unsigned *pseg = (unsigned*)(seq + sizeof(unsigned));
     char *ptxt = NULL;
-    bool match = false;
+    bool mismatch = true;
+    size_t n_matched_seg = 0;
+    size_t l_matched_seg = 0;
     int se = sb, re;
 
     assert((ptxt = (char*)malloc(seq_len + 1)) != NULL);
     assert(binary_parser::bin2text(seq, ptxt, seq_len+1) == seq_len);
-
-#ifdef DBG
-    unsigned *pref = (unsigned*)(ref_bin + sizeof(unsigned));
-    LOG("seg: %08x, ref: %08x%08x\n", pseg[sb]&seed, pref[rb>>4], pref[(rb>>4)+1]);
-#endif
 
     // find segment of seq, that match segment of reference
     int dist = 1;
@@ -330,12 +337,17 @@ align ( t_bseq *seq, int sb, int rb, int dir )
             sb = se; 
             rb = re;
             dist = 0;
-            match = true;
-        }
-    } while ((++dist<N_SEGMENT || match) && se > 0 && se < seq_len_in_word);
+            l_matched_seg += (abs(se - sb)<<4);
+            ++n_matched_seg;
+        } else {
 
-    /* 
-    if (match) {
+        }
+    } while ((++dist<N_SEGMENT || !mismatch) && se > 0 && se < seq_len_in_word);
+
+#ifdef DBG
+#endif
+
+    if (!mismatch) {
         if (dir == 1) { 
             // prefix of seq match suffix of reference
             if ((seq_len-(sb<<4)) > (ref_len-rb)) {  
@@ -347,19 +359,22 @@ align ( t_bseq *seq, int sb, int rb, int dir )
             }
         } else { 
             // suffix of seq match prefix of reference
-            if (sb > rb) {
-                align_seg(ptxt, seq_len-rb, seq_len, 0, sb+1);
+            if ((sb<<4) > rb) {
+                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16);
 //                for (int i = 0; i < seq_len-rb; ++i)
 //                    votes.push_front(Vote(ptxt[i]));
                 ref_beg += seq_len-rb;
             } else {
-                align_seg(ptxt, 0, (sb+1)<<4, rb - ((sb+1)<<4), rb);
+                align_seg(ptxt, 0, (sb<<4)+16, rb - (sb<<4), rb+16);
             }
         }
-    }  */
+#ifdef DBG
+                ++_nmatches;
+#endif
+    }  
 
     free(ptxt);
-    return match;
+    return !mismatch;
 }		/* -----  end of function align  ----- */
 
 /* 
@@ -466,25 +481,18 @@ main ( int argc, char *argv[] )
         // number of trial 
         for (size_t j = 0; j < MIN(seq_len, N_TRIAL); ++j) {
             sm_it it = seedmap.find(pseg[j] & seed);
-//            LOG("%08x\n", pseg[j]);
             if (it != seedmap.end() && try_align(seq, it->second, j, 1)) { 
-#ifdef DBG
-                ++_nmatches;
-#endif
                 found = true;
                 break;
             }
             it = seedmap.find(pseg[seq_len-j-1] & seed);
             if (it != seedmap.end() && try_align(seq, it->second, 
                         seq_len-j-1, -1)) { 
-#ifdef DBG
-                ++_nmatches;
-#endif
                 found = true;
                 break;
             }
         }
-        if (found) LOG("found %d\n", count+1);
+//        if (found) LOG("found %d\n", count+1);
 //        else ++it;
 //        it = found ? indices.erase(it) : ++it;
         if (!(++count & 0xFFF)) LOG("%d sequences processed\n", count);
