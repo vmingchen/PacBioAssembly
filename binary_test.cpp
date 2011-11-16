@@ -26,9 +26,9 @@
     int
 main ( int argc, char *argv[] )
 { 
-    const size_t N = 200000;
+    const size_t N = 2000000;
     char pdna[N];
-    unsigned char binary[4*N];
+    unsigned char binary[4+(N>>2)];
     char text[N];
     size_t blen, tlen = 0;
     FILE *fp = NULL;

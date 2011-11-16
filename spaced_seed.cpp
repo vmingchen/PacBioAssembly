@@ -25,14 +25,15 @@
 #include	<vector>
 #include	<deque>
 #include	<list>
-#include	<hash_map>
+#include	<ext/hash_map>
 
 #include	"binary_parser.h"
 #include	"common.h"
 
-#define STRONG 5
-#define N_SEGMENT 50
-#define N_TRIAL 10
+#define MAX_SEQ_LEN 100000
+#define STRONG 3
+#define N_SEGMENT 100
+#define N_TRIAL 20
 #define MAX_PAT_LEN N_SEQ_WORD
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 #define get_seq_len(x) (*((unsigned *)x))
@@ -72,7 +73,24 @@ struct Vote {
     };
 }; 
 
+
 typedef unsigned char t_bseq;
+
+struct Reference {
+    Reference(const t_bseq *pseq) {};
+    bool align(int rb, int re, const char *pseg, int sb, int se) {
+    };
+    void append(char *pseg, int len) {
+    };
+    void prepend(char *pseg, int len) {
+    };
+    bool contained(int pos) {
+        return pos >= pre && pos < post;
+    };
+    int beg, end, pre, post; 
+    char _buf[3*MAX_SEQ_LEN];
+    std::deque<Vote> consensus; 
+};
 
 // spaced seed
 unsigned seed = 0;
@@ -80,7 +98,7 @@ unsigned seed = 0;
 // buf for binary DNA sequence
 t_bseq *buf = NULL;
 // indices for binary DNA sequence
-std::list<size_t> indices;  
+std::list<int> indices;  
 
 // length of reference DNA sequence
 size_t ref_len;
@@ -88,16 +106,17 @@ t_bseq *ref_bin = NULL;
 char *ref_txt = NULL;
 
 // seedmap for reference sequence
-__gnu_cxx::hash_map< unsigned, std::list<size_t> > seedmap(1<<20);
+__gnu_cxx::hash_map< unsigned, std::list<int> > seedmap(1<<20);
 // vote against reference sequence
 std::deque<Vote> votes;
 size_t ref_beg;
 size_t ref_end;
 
-typedef std::list<size_t>::iterator ls_it;
-typedef __gnu_cxx::hash_map< unsigned, std::list<size_t> >::iterator sm_it;
+typedef std::list<int>::iterator ls_it;
+typedef __gnu_cxx::hash_map< unsigned, std::list<int> >::iterator sm_it;
 
 inline void swap(int &a, int &b) { int t = a; a = b; b = t; }
+inline unsigned get_seq_len(const t_bseq *x) { return  *((unsigned *)x); }
 
 
 /* 
@@ -252,7 +271,7 @@ match_point ( unsigned sv, int base, int dist )
     for (ls_it it1 = it->second.begin(); it1 != it->second.end(); ++it1) {
 //        LOG("offset: %d, base: %d, dist: %d\n", *it1, base, dist);
         int nd = abs(*it1 - base - dist);
-        if (4*nd <= abs(dist) && nd < diff) {
+        if (8*nd <= abs(dist) && nd < diff) {
             diff = nd;
             mp = *it1;
         }
@@ -299,7 +318,7 @@ align_seg ( const char *txt, int sb, int se, int rb, int re, int dir)
 //    print_substr(ref_txt, rb, re);
 #endif
 
-    if (filter_seq(ptxt, slen, pref, rlen)) return false;
+//    if (filter_seq(ptxt, slen, pref, rlen)) return false;
 
 //    slen += 1;
 //    rlen += 1;
@@ -377,7 +396,14 @@ align ( t_bseq *seq, int ap_s, int ap_r, int dir )
         ++dist;
         se += dir;
         re = match_point(pseg[se], rb, (dist<<4)*dir);
-        if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re, dir)) { 
+#ifdef NDBG
+        if (re != -1) { 
+            print_substr(ptxt, (sb<<4), (se<<4));
+            print_substr(ref_txt, rb, re);
+        }
+#endif
+//        if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re, dir)) { 
+        if (re != -1) { 
             sb = se; 
             rb = re;
             dist = 0;
@@ -393,48 +419,49 @@ align ( t_bseq *seq, int ap_s, int ap_r, int dir )
         }
     } while (!mismatch && se > 0 && se < seq_len_in_word);
 
-    if (!mismatch && n_matched_seg > 0) {
-        if (dir == 1) { 
-            // prefix of seq match suffix of reference
-            if ((seq_len-(sb<<4)) > (ref_len-rb) && n_matched_seg > STRONG) {  
-                align_seg(ptxt, sb<<4, ref_len-rb+(sb<<4), rb, ref_len, dir);
-//                for (int i = ref_len-rb+sb; i < seq_len; ++i)
-//                    votes.push_back(Vote(ptxt[i]));
-                print_substr(ptxt, ref_len-rb+(sb<<4), seq_len);
-            } else {
-                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4), dir);
-            }
-        } else { 
-            // suffix of seq match prefix of reference
-            if ((sb<<4) > rb && n_matched_seg > STRONG) {
-                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16, dir);
-//                for (int i = 0; i < seq_len-rb; ++i)
-//                    votes.push_front(Vote(ptxt[i]));
-                print_substr(ptxt, 0, (sb<<4)+16);
-                ref_beg += seq_len-rb;
-            } else {
-                align_seg(ptxt, 0, (sb<<4)+16, rb-(sb<<4), rb+16, dir);
-            }
-        }
+    if (!mismatch && n_matched_seg > STRONG) {
+//        if (dir == 1) { 
+//            // prefix of seq match suffix of reference
+//            if ((seq_len-(sb<<4)) > (ref_len-rb) && n_matched_seg > STRONG) {  
+//                align_seg(ptxt, sb<<4, ref_len-rb+(sb<<4), rb, ref_len, dir);
+////                for (int i = ref_len-rb+sb; i < seq_len; ++i)
+////                    votes.push_back(Vote(ptxt[i]));
+////                print_substr(ptxt, ref_len-rb+(sb<<4), seq_len);
+//            } else {
+//                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4), dir);
+//            }
+//        } else { 
+//            // suffix of seq match prefix of reference
+//            if ((sb<<4) > rb && n_matched_seg > STRONG) {
+//                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16, dir);
+////                for (int i = 0; i < seq_len-rb; ++i)
+////                    votes.push_front(Vote(ptxt[i]));
+////                print_substr(ptxt, 0, (sb<<4)-rb);
+//                ref_beg += seq_len-rb;
+//            } else {
+//                align_seg(ptxt, 0, (sb<<4)+16, rb-(sb<<4), rb+16, dir);
+//            }
+//        }
+
 #ifdef DBG
-        ++_nmatches;
-        print_substr(ptxt, ap_s, se);
-        print_substr(ref_txt, ap_r, re);
+        print_substr(ptxt, ap_s, (sb<<4));
+        print_substr(ref_txt, ap_r, rb);
+        LOG("nseg: %d\n", n_matched_seg);
 #endif
     }  
 
     free(ptxt);
-    return !mismatch && n_matched_seg > 0;
+    return !mismatch && n_matched_seg > STRONG;
 }		/* -----  end of function align  ----- */
 
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  try_align
- *  Description:  
+ *  Description:  pos is index into seq in units of 16
  * ===========================================================================
  */
     inline bool
-try_align ( const t_bseq *seq, size_t pos, int dir)
+try_align ( t_bseq *seq, size_t pos, int dir)
 {
     unsigned *pseg = (unsigned*)(seq + sizeof(unsigned));
     sm_it sit = seedmap.find(pseg[pos] & seed);
@@ -443,9 +470,10 @@ try_align ( const t_bseq *seq, size_t pos, int dir)
 #ifdef DBG
     ++_ntrials;
 #endif
-
-    for (ls_it it = sit->begin(); it != sit->end(); ++it) {
-        if (align(seq, pos, *it, dir)) 
+    ls_it it = sit->second.begin();
+    ls_it end = sit->second.end();
+    for (; it != end; ++it) {
+        if (align(seq, pos, *it, dir))   
             return true;
     }
     return false;
@@ -459,7 +487,7 @@ try_align ( const t_bseq *seq, size_t pos, int dir)
  * ===========================================================================
  */
     size_t
-open_binary ( const char *fname, std::list<size_t> &indices )
+open_binary ( const char *fname, std::list<int> &indices )
 {
     struct stat fst;
     size_t len;
@@ -500,7 +528,6 @@ main ( int argc, char *argv[] )
 { 
     size_t i_max_len, seq_len;
     t_bseq *seq;
-    unsigned *pseg;
 
     if (argc < 3) 
         handle_error("usage: spaced_seed bin seed\n");
@@ -508,6 +535,8 @@ main ( int argc, char *argv[] )
     // read binary sequence file and build index for all DNA sequences
     i_max_len = open_binary(argv[1], indices);
     // set the longest DNA sequence as initial reference
+    
+    i_max_len = *indices.begin();
     set_ref(buf+i_max_len, 1);
     LOG("i_max_len: %d\n", i_max_len);
     LOG("indices: size %d\n", indices.size());
@@ -526,31 +555,21 @@ main ( int argc, char *argv[] )
     for (ls_it it = indices.begin(); it != indices.end(); ++it) {
         if (*it == i_max_len) continue;
         seq = buf + *it;
-        pseg = (unsigned*)(seq + sizeof(unsigned));
         seq_len = (*((unsigned*)seq) >> 4); // seq length in 32-word
         if (seq_len == 0) {
             LOG("segment too short! length: %d\n", get_seq_len(seq));
             continue;
         }
-        bool found = false;
         // number of trial 
         for (size_t j = 0; j < MIN(seq_len, N_TRIAL); ++j) {
-            if (try_align(seq, j, 1) || try_align(seq, seq_len-j-1, 1)) {
-                found = true;
-                break;
-            }
-            sm_it it = seedmap.find(pseg[j] & seed);
-            if (it != seedmap.end() && try_align(seq, it->second, j, 1)) { 
-            }
-            it = seedmap.find(pseg[seq_len-j-1] & seed);
-            if (it != seedmap.end() && try_align(seq, it->second, 
-                        seq_len-j-1, -1)) { 
-                found = true;
+            if (try_align(seq, j, 1) || try_align(seq, seq_len-j-1, -1)) {
+#ifdef DBG
+                LOG("found %d\n", count+1);
+                ++_nmatches;
+#endif
                 break;
             }
         }
-        if (found) LOG("found %d\n", count+1);
-//        else ++it;
 //        it = found ? indices.erase(it) : ++it;
         if (!(++count & 0xFFF)) LOG("%d sequences processed\n", count);
     }
