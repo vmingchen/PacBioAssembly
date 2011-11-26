@@ -36,7 +36,7 @@
 #define N_TRIAL 20
 #define MAX_PAT_LEN N_SEQ_WORD
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
-#define get_seq_len(x) (*((unsigned *)x))
+//#define get_seq_len(x) (*((unsigned *)x))
 
 #ifdef DBG
 size_t _ntrials = 0;
@@ -116,7 +116,7 @@ typedef std::list<int>::iterator ls_it;
 typedef __gnu_cxx::hash_map< unsigned, std::list<int> >::iterator sm_it;
 
 inline void swap(int &a, int &b) { int t = a; a = b; b = t; }
-inline unsigned get_seq_len(const t_bseq *x) { return  *((unsigned *)x); }
+inline unsigned get_seq_len(const t_bseq *x) { return *((unsigned *)x); }
 
 
 /* 
@@ -535,7 +535,10 @@ main ( int argc, char *argv[] )
     // read binary sequence file and build index for all DNA sequences
     i_max_len = open_binary(argv[1], indices);
     // set the longest DNA sequence as initial reference
-    
+    ls_it it = indices.begin();
+    ++it;
+    ++it;
+    ++it;
     i_max_len = *indices.begin();
     set_ref(buf+i_max_len, 1);
     LOG("i_max_len: %d\n", i_max_len);
