@@ -13,6 +13,7 @@ AC_PROG_CXX
 
 # automake initialisation (mandatory) and check for minimal automake API version 1.9
 AM_INIT_AUTOMAKE([1.9])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
 # use the C++ compiler for the following checks
 AC_LANG([C++])
@@ -21,6 +22,16 @@ AC_LANG([C++])
 AC_HEADER_STDC
 AC_CHECK_HEADERS([string])
 AC_CHECK_HEADERS([iostream])
+AC_CHECK_HEADERS([limits])
+AC_CHECK_FUNCS([memset])
+AC_CHECK_HEADERS([fcntl.h])
+AC_CHECK_HEADERS([limits.h]) 
+
+AC_C_INLINE 
+AC_FUNC_MALLOC
+AC_FUNC_MMAP
+AC_HEADER_STDBOOL
+AC_PROG_CC
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
