@@ -1,0 +1,13 @@
+1) Use 8 spaced_seed like `11*11*1*1*1**111` so that a pattern can neatly fit in
+an int. 
+
+2) Build a hash map for all occurrences of a particular pattern.
+
+    Local Similarity:
+        input:
+            reference, reference occurence
+            text
+
+
+    Iterative1:
+        Build hash 

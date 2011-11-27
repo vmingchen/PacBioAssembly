@@ -1,0 +1,173 @@
+% PacBio Assembly
+% Ming Chen (mchen@cs.stonybrook.edu), 108319345 \
+ Yunting Xia (yunting.xia@gmail.com), 108269572 \
+ Xiaoshuai Yuan (joannaysx@hotmail.com), 106166174
+% 2011-10-27 
+
+# 1. Introduction
+Most shotgun sequencing methods use huge amount of short fragments to assemble
+the whole DNA sequence. However, new sequencing instruments from Pacific
+Biosciences can sequence much longer fragments of DNA than any other sequencing
+technology over 2000bp compared to 100-500bp, but at a much higher error rate
+(typically 15% error). The long read length makes the instruments very
+attractive for de novo assembly of complex genomes, but the high error rate
+prevents traditional approaches from being used. 
+
+In this paper, we propose two possible methods to assemble the long fragments
+with the high error rate. Both methods aim at eliminating errors by using high
+coverage of the long fragments. One is using Spaced Seed and the other is using
+Spectral Alignment and Error Correction [Pevzner 2001].  The critical part for
+both methods is to find overlapped fragments, which will makes error correcting
+relatively easy by alignment and voting. 
+
+# 2. Spaced Seed 
+One of our basic ideas to solve this problem is removing single base sequencing
+errors by voting in overlapped regions. Since we have 30x to 100x coverage reads
+of a few strains of E. coli and for each base the accuracy rate is about 85%,
+   the voting method seems to be attractive. But the size of the problem is very
+   large. The brutal algorithm of comparing each fragment against each other
+   fragment with $O(n^2)$ running time is unacceptable. Thus efficient and
+   accurate overlap detection is critical to solving our problem.
+
+## 2.1. Seed Method
+
+We consider the strategy of first finding short exact "seed" matches (hits),
+   which are then extended into longer overlaps. One of successful applications
+   of this strategy can be seen from the original Blast paper [Altschul 1990],
+   in which Blast looks for matches of $k$ (default $k=11$ in Blastn and $k=28$
+           in MegaBlast) consecutive letters as seeds. But this approach to
+   similarity search exhibits a key tradeoff: increasing seed size decreases
+   sensitivity whereas decreasing seed size slows down the computation.
+   Unfortunately, this disadvantage will be amplified in our problem. The high
+   error rate makes a long match less possible, so a long consecutive seed will
+   neglect many overlaps. On the other hand, short seeds lead to huge amount of
+   computation.  Therefore, we must find out more sensitive seeds for the
+   overlap detection.
+
+## 2.2. Spaced Seed 
+
+In order to alleviate this dilemma, a novel idea of using a single deterministic
+and optimized spaced seed is introduced in [Ma 2002]. In that paper,
+    nonconsecutive $k$ letters as seeds are used. They call the relative position
+    of the $k$ letters a model, and $k$ its weight. Using this spaced seed yields a
+    similarity search which is as sensitive as the one based on the naive,
+    contiguous seed but produces 4 times fewer chance hits and hence is about 4
+    times faster [Ma 2002]. For our long fragments assembly problem, the faster
+    and more sensitive spaced seed would be of great use. 
+
+At first glance, it seems surprising that spaced seeds could have an advantage
+over contiguous ones. But we can see that from some studies of the theoretical
+and practical aspects of optimal seeds. Further more, an algorithmic solution to
+the problem of finding the optimal seed are offered [Keich 2004].
+
+## 2.3. Good Spaced Seed 
+
+The next step is finding some good seeds for our problem. Actually, multiple,
+    possibly randomized, spaced patterns, spaced q-grams, and spaced probes used
+    in some other regions are also studied. For example, seeds are designed for
+    speeding up local alignment [Choi 2003]. They find out that the best spaced
+    seed of weight 9 is `11*11*1*1***111` and the best of weight 10 is
+    `11*11***11*1*111` (1s correspond to the matching positions) [Choi 2003]. 
+
+Considering the similarity between the local alignment and our problem, we can
+start to find overlaps by using those best seeds. Or we can use similar methods
+to find out our own best seeds. In general, using sensitive spaced seeds can
+help us find the overlaps between long fragments efficiently.
+
+
+# 3. Spectral Alignment and Error Correction 
+In addition to spaced seed, we present another potential method to correct read
+errors in this section. To do that, a good start point is to study the error
+pattern in the reads. By aligning reads of an already known sequence against
+itself, we can work out the probability of all kinds of errors. Once this error
+model is obtained from training data, it can be used to measure distance between
+reads in a similar manner of Point Accepted Mutations (PAM). 
+
+## 3.1. Spectral Alignment and Error Correction
+A potential method to solve the problem is use the Spectral Alignment and Error
+Correction algorithm in [Pevzner 2001]. Actually, [Pevzner 2001] is not directly
+applicable to our problem. Spectral Alignment and Error Correction required an
+initial *spectrum*, which is a collection of solid $l$-tuples (short reads of
+        length $l$) from the right DNA sequence we try to obtain. The error rate
+is so high for our long reads that there is no way to guarantee $l$-tuples from
+them are solid. However, thanks to the high coverage of fragments, it is likely
+to get a small spectrum using the "overlap-layout-consensus" paradigm. Start
+from the small spectrum, we can iteratively correct more fragments and add their
+corrected $l$-tuples into the spectrum. During the iteration, the spectrum
+itself will gradually becomes more valid as well. Then the key problem becomes
+how to find overlapped fragments. 
+
+## 3.2. Overlap Detection Using Base Statistics 
+Overlapped fragments can come from several sources: 1) repeats in DNA sequence,
+            2) accident match due to errors, 3) and coverage overlaps during
+            sequencing. The third case is one that can help eliminate errors and
+            establish our initial spectrum. Fortunately, a big advantage of long
+            reads is that it makes the first two cases difficult to appear.
+            First, it is rare for DNA to have such long repeats. If the DNA does
+            have very long repeats, fragments of all sizes face the same problem
+            and long fragments only alleviate this problem compared to short
+            ones. In case of these long repeats, the Eulerian Superpath method
+            presented in [Pevzner 2001] can be employed to solve the problem.
+            Second, the long length of fragments makes accident match almost
+            impossible even considering its high error rate.  Therefore, it is
+            safe to take consensus of large-number of long overlapped fragments
+            as valid.
+
+Let us consider the problem of matching overlapped fragments. A naive way is to
+pair fragments and measure their distance. As another advantage, long reads
+somehow facilitate this matching because, under same coverage, the number of
+reads is relatively small. For E. Coli, which is 4.6 million base pairs in
+length, the number of 2000-base-long reads is 2300 when coverage is 1. However,
+    2300 is still large if we try to measure the distance between each pair of
+    them, even not considering the high coverage. We need some efficient
+    heuristic algorithm to select candidates of pairs, which are likely to match
+    with high probability. One possible approach is to group reads by features
+    relatively robust to local changes, for example, base statistics. If bases
+    are changed to other bases randomly with equal probability, then base
+    statistics will keep the same despite errors. Otherwise, the error model we
+    trained can be used to adjust the bias. Similar ideas, like robust signal
+    hashing, has been successfully applied in multimedia for copy detecting
+    [Roover 2005]. Afterwards, instead of brutally matching all pairs, we can
+    take two reads from a same group or close groups as candidates. 
+
+With those candidates, we can employ the [Ukkonen 1985] algorithm in time
+$O(t^2)$ to tell if the distance between them is within our threshold ($t$) or
+not. For 2000-base-long reads with 15% error rate, a simple threshold is the
+edit distance incurred by errors, which makes 300 a reasonable value for $t$.
+Because [Ukkonen 1985] algorithm runs in time $O(t^2)$, it is quite fast to rule out
+mismatches.  Those matched fragments will be further aligned with each other.
+Then, their consensus will be used to correct errors and to establish the
+initial spectrum. 
+
+# 4. Conclusion
+We have studied two possible methods to use the long fragments for DNA assembly.
+The key point for both methods is to eliminate errors using consensus of
+overlapped fragments. Thanks to the high coverage, it is likely that most errors
+will be corrected. As long as fragments overlaps can be detected efficiently, the
+assembly of corrected long fragments should be relatively easy. 
+
+# References
+
+[Altschul 1990] S. F. Altschul, W. Gish, W. Miller, E. Myers, D. J. Lipman,
+    Basic local alignment search tool, J. Mol. Biol., 215 (1990), 403-410.
+
+[Ma 2002] B. Ma, J. Tromp, M. Li, Pattern Hunter–faster and more sensitive
+homology search. Bioinformatics, 18 (2002), 440-445.
+
+[Keich 2004] U. Keich, B. Ma, M. Li, and J. Tromp, On spaced seeds for
+similarity search, Discrete Applied Mathematics 138 (3) (2004), 253–263.
+
+[Choi 2003] K. Choi, F. Zeng, and L. Zhang, Good spaced seeds for homology
+search.  Bioinformatics 20 (2003), 1053-1056.
+
+[Ukkonen 1985] E. Ukkonen, Algorithms For Approximate String Matching,
+    Information and Control, 64 (1985), 100-118. 
+
+[Roover 2005] C. De Roover, C. De Vleeschouwer, F. Lefebvre, B. Macq, Robust
+video hashing based on radial projections of key frames, IEEE Transactions on
+Signal Processing, 53 (10), 2005, 4020-4037. 
+
+[Pevzner 2001] P. A. Pevzner, H. Tang, and M. S. Waterman. 2001, A New Approach
+to Fragment Assembly in DNA Sequencing, Proceedings of the Fifth Annual
+International Conference on Computational Biology (RECOMB '01), New York, NY,
+              256-267.

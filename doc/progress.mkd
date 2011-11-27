@@ -1,0 +1,128 @@
+% PacBio Assembly
+% Ming Chen (mchen@cs.stonybrook.edu), 108319345 \
+ Yunting Xia (yunting.xia@gmail.com), 108269572 \
+ Xiaoshuai Yuan (joannaysx@hotmail.com), 106166174
+% 2011-11-17 
+
+# 1. Introduction
+Our team aims at assembling the genome of E-coli from PacBio's long sequence
+reads with high error rate. Researcher in PacBio eliminated the errors by
+aligning relatively short but accurate Circular Consensus Sequencing (CCS) reads
+against those long reads.  However, we proposed to assemble the genome using
+only long reads, which is challenging but possible thanks to large coverage of
+the reads. 
+
+The key issue of our problem is to efficiently and accurately detect overlaps.
+We proposed to achieve it through the seed-and-extend paradigm. Once overlapped
+reads are found, more precise sequence can be obtained by consensus. 
+
+# 2. Progress
+After our proposal, we have 1) come up with the design of the assemble
+algorithm, 2) finished the coding of a large part of the program, and 3)
+undertaken some primitive experiments. 
+
+## 2.1. Algorithm Design
+Our algorithm iteratively aligns long reads to a reference sequence. During each
+alignment, the aligned reads will vote to correct errors in the reference and
+expand it if they are at boundaries of the reference. As only long reads with
+high error rates are available, we initialize the reference sequence as some
+high quality reads with relatively long length. By high quality, we mean high
+average Phred quality scores, which are easily accessible in the FASTQ sequence
+files downloaded from DevNet of PacBio. 
+
+Spaced seeds are used to find overlapped sequence that can be aligned to the
+reference. To achieve this, we build a seedmap for the reference and detect
+overlaps by looking up seeds from a candidate read into it. The seedmap is a
+hashmap for all possible seeds of the reference, so look-up into it is fast.
+Given a reference of length $n$ and a spaced seed with length $k$ and weight $w$
+(weight here is the number of 1s in the spaced seed pattern, e.g., the weight of
+ the 16-base-long seed pattern `111*11*1*1*1*111` is 11), there will be $n-k+1$
+seeds, when the seed pattern is applied to the reference at different places.
+For each candidate read, there is no need to lookup all of its seeds because we
+can safely rule it out if it fails a certain number of trials. In our
+implementation, we compare about 16 seeds at the begin and the end of the
+candidates. Once a overlapped read is detected, it will be aligned and removed
+from the reads set. 
+
+After a round of iteration, most reads overlapped with the reference will be
+found and then aligned to the reference. It is worthy notice that we are dealing
+with long reads (mean length larger than 2000), so the regular quadratic dynamic
+programming alignment of single reads is still prohibitive. A heuristic
+workaround is used to avoid this by deviding long reads into subsegments using
+spaced seed. Given a read $S$ with length $l$, which is overlapped with region
+$(i,i+l')$ of the reference $R$. It is very likely that some seeds in the middle
+of $S$, e.g., at position $t$, will match within the reference region $(i,i+l')$
+at position $t'$. Then we align $S[1:t]$ with $R[i:t']$, and $S[t+1:l]$ with
+$R[t'+1:i+l']$ separately. During the alignment, reference will extend if there
+are reads overlap with it at the two boundaries. This expansion will enable the
+reference to grow and find more overlapped reads during future iterations. 
+
+In this way, the reference get expanded and refined, meanwhile, the reads set
+shrinks. Eventually, the iteration will converge and end. The resulting
+reference will incorporate a large portion of the reads to form contigs, or most
+reads to form the genome. 
+
+## 2.2. Finished Coding
+We are implementing the algorithm using C++. Our data is "E. coli C227-11
+Filtered Reads FASTQ" from
+http://www.pacbiodevnet.com/Share/Datasets/E-coli-Outbreak. The sequence files
+are 3G after decompression and DNA sequences contribute half of the size,
+    whereas the other half is quality string in the FASTQ format. 1.5G is still
+    quite large and cannot fit into our laptop's memory easily. However, we do
+    not want to do too much disk IO becomes IO operations can significantly slow
+    down the whole program. So we converted the DNA sequences into a binary file
+    and decrease the memory assumption into a quarter of the size. The binary
+    format is not only memory efficient, it also facilitates the calculation of
+    spaced seeds. By carefully choosing the seed pattern to be of length 16, a
+    seed can fit into one 32-bit (2 bits for one base) machine word, so a seed
+    match is just a comparison of two unsigned integers. Using binary format, we
+    can easy obtain seeds using bitwise operations on the sequence and the seed
+    pattern. A class is created to provide interfaces of manipulating the binary
+    format. It is tested and runs correctly and efficiently. 
+
+The seedmap is implemented as a hash_map from the standard template library.
+Ideally, every time the reference gets updated by incorporating a new read, its
+seedmap should be refreshed as well. But it is very time-consuming, especially
+when it becomes long in the late phases of the iteration. So, we made a tradeoff
+and only add elements into the seedmap in one iteration. First, let us consider
+the case of substitution. A 'C' base at the $j$-th position of the reference may
+have been voted to become 'G'. In our implementation, this change of consensus
+will not be reflected in the seedmap until next iteration. This delay of update
+is not a big problem because missed overlaps can be detected in later
+iterations. Second, as to deletion, we can just ignore it because a deletion of
+a base it is just an absence of one vote at that position. We can delete the
+base if it gets significant less votes at the end of iteration. The third case,
+     insertion, is the most difficult. For insertion at the two ends of the
+     reference, it is easy because we can add new seed without invalidating the
+     seedmap. It is difficult to handle insertion in the middle while keeps
+     elements in the seedmap intact. In our implementation, we solved this by
+     only allowing one insertion after each place. Alignments with overlaps may
+     insert many bases after one position, however, no matter how many bases are
+     inserted by whatever-number-of-overlaps, only one box is used for all of
+     them. For example, one read wants to insert 'ACCG' after the $j$-th
+     position of the reference, and another read wants to insert 'GGT' at the
+     same position, then the box reserved for insertion at that position will
+     have votes 'A:1, C:2, G:3, T:1'. If 3 is significant, there will be one
+     additional 'G' only after the current round terminates. The code for the
+     overlaps detection is finished and partially tested, while the code for
+     updating seedmap after alignment is drawing to an end. 
+
+## 2.3. Primitive Experiment
+We have run several primitive experiments to test our program. For the binary
+format, we successfully converted 100M sequence into binary file and get the
+exact sequences back in text format. For the seed pattern matching, we have use
+test case to ensure it can locate seeds of interesting value after reading
+sequences from binary file. For the overlap detection, the program passed
+artificial test cases to find overlaps. We also applied our program to detect
+overlap from real data, we got good overlaps in some cases. For the first
+iteration, the program runs in 3 seconds on the whole data and can find several
+reads likely to overlap with the reference. One pair of reads (the second being
+the reference) is attached as an example of the detected overlaps. 
+
+
+# 3. Further Work
+The first thing we are going to do is to finish the program and thoroughly test
+it to fix bugs. Then we will undertake experiments on real data and tuned our
+program according to the results. In the end, we will have a program that can
+efficiently assemble E-coli's genome using those long reads with high error
+rate. Hopefully, we can obtain a genome with high precision.
