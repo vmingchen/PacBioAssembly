@@ -61,15 +61,19 @@ public:
             return -1;
         }
 
-        init_cell(n+1, m+1);
+        init_cell(n, m);
 
         if (!search(pseg, pref, n, m, l)) return -1;
 
         int ti, tj;
-        goal_cell(&ti, &tj, n+1, m+1);
+        goal_cell(&ti, &tj, n, m);
         if (ti < n*(1-R)) return -1;
         nedit = 0;
         find_path(ti, tj, pref);
+
+//        for (int i = 0; i < nedit; ++i) {
+//            printf("%d: %c\n", edits[i].op, edits[i].val);
+//        }
 
         return tj;
     };
@@ -90,13 +94,16 @@ private:
     int indel(char c) { return -4; };
     // translate index into rectangle matrix to index into diagonal stripe
     void init_cell(int n, int m) {
-        memset(mat, 0, sizeof(cell)*MAXN*MAXM);
-//        for (int i=0; i<n; ++i) { 
-//            for (int j=0; j<m; ++j) { 
-//                mat[i][j].parent = 0;
-//                mat[i][j].score = 0;
-//            }
-//        }
+        set_score(0, 0, 0);
+        set_parent(0, 0, 0);
+        for (int i=1; i<=n; ++i) {
+            set_score(i, 0, -4*i);
+            set_parent(i, 0, DELETE);
+        }
+        for (int j=1; j<=m; ++j) {
+            set_score(0, j, -4*j);
+            set_parent(0, j, INSERT);
+        }
     };
     bool search(seq_accessor *pseg, seq_accessor *pref, int n, int m, int l) {
         pseg->reset(0);     // start from the first
