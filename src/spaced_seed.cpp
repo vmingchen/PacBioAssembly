@@ -27,7 +27,7 @@
 #include	<list>
 #include	<ext/hash_map>
 
-#include	"dna.h"
+#include	"dna_seq.h"
 #include	"common.h"
 
 #define MAX_SEQ_LEN 100000
@@ -154,7 +154,7 @@ set_ref ( void *new_ref, int type )
             free(ref_txt);
         if ((ref_txt = (char*)malloc(ref_len + 1)) == NULL)
             handle_error("fail to alloc memory for ref_txt");
-        assert(dna::bin2text(ref_bin, ref_txt, ref_len+1) == ref_len); 
+        assert(dna_seq::bin2text(ref_bin, ref_txt, ref_len+1) == ref_len); 
     } else if (type == 2) {
         if (ref_txt != NULL)
             free(ref_txt);
@@ -165,7 +165,7 @@ set_ref ( void *new_ref, int type )
         size_t blen = (ref_len+4-1)/4 + sizeof(unsigned);
         if ((ref_bin = (t_bseq*)malloc(blen)) == NULL)
             handle_error("fail to alloc memory for ref_bin");
-        assert(dna::text2bin(ref_txt, ref_bin, blen) == blen);
+        assert(dna_seq::text2bin(ref_txt, ref_bin, blen) == blen);
     } else if (type == 3) {
         char *ptxt = (char*)malloc(votes.size()+1);
         if (ptxt == NULL)
@@ -198,7 +198,7 @@ parse_pattern ( const char *pat )
 
     for (size_t i = 0; i < len; ++i) 
         dnapat[i] = (pat[i] == '1' ? 'T' : 'A');
-    return dna::encode(dnapat);
+    return dna_seq::encode(dnapat);
 }		/* -----  end of function parse_pattern  ----- */
 
 
@@ -217,7 +217,7 @@ build_seedmap (  )
     seedmap.clear();
 
     for (size_t i = 0; i < nseed; ++i) {
-        unsigned tseg = dna::encode(ref_txt + i);
+        unsigned tseg = dna_seq::encode(ref_txt + i);
         // there are a lot of 'AAAAAAAAAAAAAAAA' segments, ignore them
         if (seed & tseg) seedmap[seed & tseg].push_back(i);
     }
@@ -263,7 +263,7 @@ match_point ( unsigned sv, int base, int dist )
     sm_it it = seedmap.find(sv & seed);
 #ifdef NDBG
     char seg[N_SEQ_WORD];
-    dna::decode(sv & seed, seg);
+    dna_seq::decode(sv & seed, seg);
     LOG("%.16s\n", seg);
 #endif
     if (it == seedmap.end()) 
@@ -386,7 +386,7 @@ align ( t_bseq *seq, int ap_s, int ap_r, int dir )
     int sb, rb, se, re; 
 
     assert((ptxt = (char*)malloc(seq_len + 1)) != NULL);
-    assert(dna::bin2text(seq, ptxt, seq_len+1) == seq_len);
+    assert(dna_seq::bin2text(seq, ptxt, seq_len+1) == seq_len);
 
     // find segment of seq, that match segment of reference
     se = sb = ap_s;

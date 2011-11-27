@@ -1,7 +1,7 @@
 /*
  * ===========================================================================
  *
- *       Filename:  dna.h
+ *       Filename:  dna_seq.h
  *         Author:  Ming Chen, brianchenming@gmail.com
  *        Created:  11/08/2011 11:59:58 AM
  *
@@ -11,8 +11,8 @@
  *
  * ===========================================================================
  */
-#ifndef _DNA_H
-#define _DNA_H
+#ifndef DNA_SEQ_H
+#define DNA_SEQ_H
 #include	<assert.h>
 
 #define C2I(x) ((x == 'A') ? 0 : ((x == 'C') ? 1 : (x == 'G' ? 2 : 3)))
@@ -26,7 +26,7 @@
 static const char codes[4] = {'A', 'C', 'G', 'T'};
 
 
-class dna {
+class dna_seq {
 public:
 //    // create binary file from text file 
 //    void create(const char *in_path, const char *out_path);
@@ -119,13 +119,13 @@ private:
     }
 };
 
-class dna_accessor {
+class seq_accessor {
 public:
-    dna_accessor(char *p, bool f, int l) : pdna(p), pcur(p), forward(f), len(l) {};
+    seq_accessor(char *p, bool f, int l) : pdna(p), pcur(p), forward(f), len(l), cnt(0) {};
     int length() { return len; };
     bool has_more() { return cnt < len; };
     char next() { ++cnt; return forward ? *pcur++ : *pcur--; };
-    void reset(int pos) { cnt = 0; pcur = forward ? pdna + pos: pdna - pos; };
+    void reset(int pos) { cnt = pos; pcur = forward ? pdna + pos: pdna - pos; };
     char at(int i){ return forward ? *(pdna+i) : *(pdna-i); };
     char* pt(int i) { return forward ? (pdna+i) : (pdna-i); };
 private:
