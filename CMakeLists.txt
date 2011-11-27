@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 2.0)
+project(spaced_seed)
+include_directories(
+    "/home/ming/software/gtest-1.6.0"
+    "/home/ming/software/gtest-1.6.0/include"
+    "${CMAKE_SOURCE_DIR}/src" 
+    "${CMAKE_SOURCE_DIR}/test"
+)
+add_executable(
+    src/spaced_seed 
+    src/spaced_seed.cpp 
+    src/common.h 
+    src/local_aligner.h 
+    src/dna.h
+)
+enable_testing()
+add_executable(
+    test/unit_test 
+    test/dna_test.cpp
+)
+add_library(gtest
+    /home/ming/software/gtest-1.6.0/src/gtest-all.cc
+)
+add_library(gtest_main
+    /home/ming/software/gtest-1.6.0/src/gtest_main.cc
+)
+link_libraries(
+    "/home/ming/software/gtest-1.6.0/lib"
+)
+target_link_libraries(test/unit_test gtest gtest_main pthread)
