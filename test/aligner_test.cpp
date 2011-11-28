@@ -14,6 +14,8 @@
 
 #include <gtest/gtest.h>
 #include <seq_aligner.h>
+#include	<fstream>
+#include	<string>
 
 char dna_ref[] = "ACGTAACCGGTT";
 char dna_seg1[] = "CGTAAGC";
@@ -68,5 +70,17 @@ TEST_F(aligner_test, backward) {
     EXPECT_EQ(7, aligner.align(&seg, &ref));
     EXPECT_EQ(26, aligner.final_score());
     edit_tester(&ref, &aligner);
+}
+
+TEST_F(aligner_test, sample) {
+    seq_aligner aligner;
+    std::ifstream fin("align_example.txt");
+    std::string ref_str, seg_str;
+    fin >> ref_str >> seg_str;
+    seq_accessor ref((char*)ref_str.c_str()+ref_str.length()-1, 
+            false, ref_str.length());
+    seq_accessor seg((char*)seg_str.c_str()+seg_str.length()-1,
+            false, seg_str.length());
+    EXPECT_LT(0, aligner.align(&seg, &ref));
 }
 
