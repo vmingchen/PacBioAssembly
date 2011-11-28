@@ -39,27 +39,19 @@ protected:
     };
 };
 
-TEST_F(aligner_test, overlay) {
-    seq_aligner aligner;
-    seq_accessor ref((char*)dna_ref + 2, true, 10);
-    seq_accessor seg((char*)dna_seg2, true, 14);
-    EXPECT_EQ(10, aligner.align(&seg, &ref));
-    EXPECT_EQ(41, aligner.final_score());
-    edit_tester(&ref, &aligner);
-}
-
 TEST_F(aligner_test, forward) {
     seq_aligner aligner;
     seq_accessor ref1((char*)dna_ref, true, 12);
     seq_accessor seg1((char*)dna_seg1, true, 6);
-    EXPECT_EQ(6, aligner.align(&seg1, &ref1));
-    EXPECT_EQ(21, aligner.final_score());
+    EXPECT_LE(6, aligner.align(&seg1, &ref1));
+    EXPECT_GE(7, aligner.align(&seg1, &ref1));
+    EXPECT_EQ(2, aligner.final_cost());
     edit_tester(&ref1, &aligner);
 
     seq_accessor ref2((char*)dna_ref, true, 12);
     seq_accessor seg2((char*)dna_seg1, true, 7);
     EXPECT_EQ(7, aligner.align(&seg2, &ref2));
-    EXPECT_EQ(22, aligner.final_score());
+    EXPECT_EQ(2, aligner.final_cost());
     edit_tester(&ref2, &aligner);
 }
 
@@ -68,19 +60,30 @@ TEST_F(aligner_test, backward) {
     seq_accessor ref((char*)dna_ref + 7, false, 7);
     seq_accessor seg((char*)dna_seg1 + 6, false, 7);
     EXPECT_EQ(7, aligner.align(&seg, &ref));
-    EXPECT_EQ(26, aligner.final_score());
+    EXPECT_EQ(1, aligner.final_cost());
+    edit_tester(&ref, &aligner);
+}
+
+TEST_F(aligner_test, overlay) {
+    seq_aligner aligner;
+    seq_accessor ref((char*)dna_ref + 2, true, 10);
+    seq_accessor seg((char*)dna_seg2, true, 14);
+    EXPECT_EQ(10, aligner.align(&seg, &ref));
+    EXPECT_EQ(1, aligner.final_cost());
     edit_tester(&ref, &aligner);
 }
 
 TEST_F(aligner_test, sample) {
     seq_aligner aligner;
-    std::ifstream fin("align_example.txt");
+    std::ifstream fin("test/real_align.txt");
     std::string ref_str, seg_str;
     fin >> ref_str >> seg_str;
-    seq_accessor ref((char*)ref_str.c_str()+ref_str.length()-1, 
+//    std::cout << ref_str << "\n" << seg_str << "\n";
+    seq_accessor ref((char*)ref_str.c_str() + ref_str.length()-1, 
             false, ref_str.length());
-    seq_accessor seg((char*)seg_str.c_str()+seg_str.length()-1,
+    seq_accessor seg((char*)seg_str.c_str() + seg_str.length()-1,  
             false, seg_str.length());
     EXPECT_LT(0, aligner.align(&seg, &ref));
+    edit_tester(&ref, &aligner);
 }
 

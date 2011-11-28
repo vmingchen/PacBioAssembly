@@ -36,7 +36,7 @@ enum OP {
 };
 
 typedef struct {
-    int score;        
+    int cost;        
     int parent;      
 } state;
 
@@ -90,11 +90,11 @@ public:
 
         return ref_ml;
     };
-    int get_score(int i, int j) {
-        return mat[i][j-i+max_dst].score;
+    int get_cost(int i, int j) {
+        return mat[i][j-i+max_dst].cost;
     };
-    void set_score(int i, int j, int v) {
-        mat[i][j-i+max_dst].score = v;
+    void set_cost(int i, int j, int v) {
+        mat[i][j-i+max_dst].cost = v;
     };
     int get_parent(int i, int j) {
         return mat[i][j-i+max_dst].parent;
@@ -102,29 +102,29 @@ public:
     void set_parent(int i, int j, int p) {
         mat[i][j-i+max_dst].parent = p;
     }
-    int final_score() {
-        return get_score(seg_ml, ref_ml);
+    int final_cost() {
+        return get_cost(seg_ml, ref_ml);
     }
 private:
-    int match(char c, char d) { return c == d ? 5 : -4; };
-    int indel(char c) { return -4; };
+    int match(char c, char d) { return c != d; };
+    int indel(char c) { return 1; };
     // translate index into rectangle matrix to index into diagonal stripe
     void init_cell() {
         for (int i=0; i<=seg_len; ++i) {
             int beg = MAX(1, i - max_dst);
             int end = MIN(ref_len, i + max_dst);
             for (int j=beg; j<=end; ++j) {
-                set_score(i, j, -4*MAX(i, j));
+                set_cost(i, j, MAX(i, j));
                 set_parent(i, j, i>j ? DELETE : (i==j ? MATCH : INSERT));
-            }
+            } 
         }
-        set_score(0, 0, 0);
+        set_cost(0, 0, 0);
         set_parent(0, 0, 0);
     };
     bool search(seq_accessor *pseg, seq_accessor *pref) {
         pseg->reset(0);     // start from the first
-        int best_score = 0;
         for (int i=1; i<=seg_len; ++i) {
+            int best_cost = 0;
             char c = pseg->next();
             int beg = MAX(1, i - max_dst);
             int end = MIN(ref_len, i + max_dst);
@@ -132,43 +132,41 @@ private:
             for (int j=beg; j<=end; ++j) {
                 char d = pref->next();
                 int t; 
-                int score = get_score(i, j);
-                if ((t = get_score(i-1, j-1) + match(c, d)) > score) {
-                    set_score(i, j, t);
+                int cost = get_cost(i, j);
+                if ((t = get_cost(i-1, j-1) + match(c, d)) < cost) {
+                    set_cost(i, j, t);
                     set_parent(i, j, MATCH);
-                    score = t;
+                    cost = t;
                 }
-                if ((t = get_score(i, j-1) + indel(c)) > score) {
-                    set_score(i, j, t);
+                if (i-j<max_dst && (t=get_cost(i,j-1)+indel(c)) < cost) {
+                    set_cost(i, j, t);
                     set_parent(i, j, INSERT);
-                    score = t;
+                    cost = t;
                 }
-                if ((t = get_score(i-1, j) + indel(d)) > score) {
-                    set_score(i, j, t);
+                if (j-i<max_dst && (t=get_cost(i-1,j)+indel(d)) < cost) {
+                    set_cost(i, j, t);
                     set_parent(i, j, DELETE);
-                    score = t;
+                    cost = t;
                 }
-                best_score = MAX(score, best_score);
+                best_cost = MIN(cost, best_cost);
             }
             // early failure 
-            if (i > 10 && best_score < 3*i) return false;
+            if (i > 10 && best_cost > i*R) {
+                printf("failed at %d\n", i);
+                return false;
+            }
         }
         return true;
     };
     void goal_cell() {
-        seg_ml = ref_ml = 0;
-        int best_score = get_score(0, 0);
-        for (int i=1; i<=seg_len; ++i) {
-            int beg = MAX(1, i - max_dst);
-            int end = MIN(ref_len, i + max_dst);
-            for (int j=beg; j<=end; ++j) {
-                if (get_score(i, j) > best_score) {
-                    seg_ml = i;
-                    ref_ml = j;
-                    best_score = get_score(i, j);
-                }
-            }
-        }
+        seg_ml = seg_len;
+        ref_ml = ref_len;
+        while (seg_ml > ref_len 
+                && get_cost(seg_ml-1, ref_ml) <= get_cost(seg_ml, ref_ml))
+            --seg_ml;
+        while (ref_ml > seg_len 
+                && get_cost(seg_ml, ref_ml-1) <= get_cost(seg_ml, ref_ml))
+            --ref_ml;
     };
     void find_path(int i, int j, seq_accessor *pref) {
         int p = get_parent(i, j);
@@ -202,7 +200,7 @@ private:
                 if (j < i-max_dst || j > i+max_dst) 
                     printf("%d\t", -1);
                 else
-                    printf("%d\t", get_score(i, j));
+                    printf("%d\t", get_cost(i, j));
             }
             printf("\n");
         }
