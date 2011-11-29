@@ -23,9 +23,6 @@ TEST(dna_seq, binary) {
     EXPECT_EQ(10, dna_seq::text2bin(dna_str, bin_buf, 14));
     EXPECT_EQ(23, dna_seq::bin2text(bin_buf, txt_buf, 41));
     EXPECT_STREQ(dna_str, txt_buf);
-    printf("%08x\n", dna_seq::seed_at(bin_buf, 0));
-    printf("%08x\n", *((unsigned*)(bin_buf+4)));
-    printf("%08x\n", dna_seq::encode(dna_str));
     EXPECT_EQ(0x34DAB41B, dna_seq::seed_at(bin_buf, 0));
     EXPECT_EQ(0x41A34DBB, dna_seq::seed_at(bin_buf, 2));
     EXPECT_EQ(0xAF058D36, dna_seq::seed_at(bin_buf, 7));

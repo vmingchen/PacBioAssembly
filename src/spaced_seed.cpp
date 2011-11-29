@@ -624,6 +624,7 @@ main ( int argc, char *argv[] )
             LOG("segment too short! length: %d\n", get_seq_len(seq));
             continue;
         }
+
         // number of trial 
         for (size_t j = 0; j < MIN(seq_len, N_TRIAL); ++j) {
             if (try_align(seq, j, 1) || try_align(seq, seq_len-j-1, -1)) {

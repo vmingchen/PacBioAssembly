@@ -47,11 +47,23 @@ public:
     // read a record from the binary
     const unsigned* read(unsigned *plen) const { return NULL; };
     static unsigned seed_at(unsigned char *pbin, int pos) {
-        int np = pos >> 4;
+        unsigned char pseed[4];
+
+        pbin += sizeof(unsigned);
         unsigned *p = (unsigned*)(pbin + sizeof(unsigned));
-        if (pos & 0xF == 0) return p[np];
-        return (p[np] << ((pos - (np<<4))<<1)) 
-            | (p[np+1] >> ((pos & 0xF)<<1));
+
+        if ((pos & 0xf) == 0) return *((unsigned*)(pbin+pos));
+
+        pbin += (pos >> 2);
+        unsigned ls = pos & 0x3;
+        unsigned rs = 0x4 - ls;
+        ls <<= 1; rs <<= 1;
+        pseed[0] = (*pbin << ls) | (*++pbin >> rs);
+        pseed[1] = (*pbin << ls) | (*++pbin >> rs);
+        pseed[2] = (*pbin << ls) | (*++pbin >> rs);
+        pseed[3] = (*pbin << ls) | (*++pbin >> rs);
+
+        return *((unsigned*)pseed);
     }
     static char value_at(unsigned char bv, int idx) {
         return codes[(bv >> ((~idx & 0x3) << 1)) & 0x3];
