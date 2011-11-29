@@ -25,6 +25,16 @@
 
 static const char codes[4] = {'A', 'C', 'G', 'T'};
 
+struct bin_seq {
+    int quality;
+    int length;
+    unsigned char *data;
+};
+
+struct txt_seq {
+    int quality;
+    char *data;
+};
 
 class dna_seq {
 public:
@@ -36,6 +46,16 @@ public:
     bool empty(){ return true; };
     // read a record from the binary
     const unsigned* read(unsigned *plen) const { return NULL; };
+    static unsigned seed_at(unsigned char *pbin, int pos) {
+        int np = pos >> 4;
+        unsigned *p = (unsigned*)(pbin + sizeof(unsigned));
+        if (pos & 0xF == 0) return p[np];
+        return (p[np] << ((pos - (np<<4))<<1)) 
+            | (p[np+1] >> ((pos & 0xF)<<1));
+    }
+    static char value_at(unsigned char bv, int idx) {
+        return codes[(bv >> ((~idx & 0x3) << 1)) & 0x3];
+    }
     static unsigned encode(const char *ptext) {
         unsigned tseg = 0;
         unsigned char *t = (unsigned char*)&tseg;
@@ -113,9 +133,6 @@ private:
             pt[2] = codes[(bv >> 2) & 0x3];
             pt[3] = codes[bv & 0x3];
         }
-    }
-    static char codeat(unsigned char bv, int idx) {
-        return codes[(bv >> ((~idx & 0x3) << 1)) & 0x3];
     }
 };
 

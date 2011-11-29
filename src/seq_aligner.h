@@ -25,8 +25,8 @@
 
 // ratio is the maximum bias between segment and reference
 //#define DEBUG_ALIGNER
-#define R 0.3
-#define MAXN 2000
+#define R 0.35
+#define MAXN 20000
 #define MAXM (int)(MAXN*R)
 
 enum OP {
@@ -90,21 +90,11 @@ public:
 
         return ref_ml;
     };
-    int get_cost(int i, int j) {
-        return mat[i][j-i+max_dst].cost;
-    };
-    void set_cost(int i, int j, int v) {
-        mat[i][j-i+max_dst].cost = v;
-    };
-    int get_parent(int i, int j) {
-        return mat[i][j-i+max_dst].parent;
-    }
-    void set_parent(int i, int j, int p) {
-        mat[i][j-i+max_dst].parent = p;
-    }
-    int final_cost() {
-        return get_cost(seg_ml, ref_ml);
-    }
+    int get_cost(int i, int j) { return mat[i][j-i+max_dst].cost; };
+    void set_cost(int i, int j, int v) { mat[i][j-i+max_dst].cost = v; };
+    int get_parent(int i, int j) { return mat[i][j-i+max_dst].parent; }
+    void set_parent(int i, int j, int p) { mat[i][j-i+max_dst].parent = p;}
+    int final_cost() { return get_cost(seg_ml, ref_ml); }
 private:
     int match(char c, char d) { return c != d; };
     int indel(char c) { return 1; };
@@ -124,7 +114,7 @@ private:
     bool search(seq_accessor *pseg, seq_accessor *pref) {
         pseg->reset(0);     // start from the first
         for (int i=1; i<=seg_len; ++i) {
-            int best_cost = 0;
+            int best_cost = seg_len;
             char c = pseg->next();
             int beg = MAX(1, i - max_dst);
             int end = MIN(ref_len, i + max_dst);
@@ -150,9 +140,12 @@ private:
                 }
                 best_cost = MIN(cost, best_cost);
             }
+#ifdef DEBUG_ALIGNER
+            LOG("i = %d, best_cost = %d\n", i, best_cost);
+#endif
             // early failure 
-            if (i > 10 && best_cost > i*R) {
-                printf("failed at %d\n", i);
+            if (i > 10 && get_cost(i, i) > i*R) {
+//                printf("failed at %d\n", i);
                 return false;
             }
         }

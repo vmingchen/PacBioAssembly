@@ -20,6 +20,13 @@ add_executable(
     src/dna_seq.h
 )
 add_executable(
+    src/visual_align 
+    src/visual_align.cpp 
+    src/common.h 
+    src/seq_aligner.h 
+    src/dna_seq.h
+)
+add_executable(
     test/dna_test 
     test/dna_test.cpp
 )

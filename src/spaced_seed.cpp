@@ -5,7 +5,7 @@
  *         Author:  Ming Chen, brianchenming@gmail.com
  *        Created:  11/07/2011 03:03:04 PM
  *
- *    Description:  
+ *    Description:  perform spaced seed
  *
  *       Revision:  none
  *
@@ -26,8 +26,10 @@
 #include	<deque>
 #include	<list>
 #include	<ext/hash_map>
+#include	<fstream>
 
 #include	"dna_seq.h"
+#include	"seq_aligner.h"
 #include	"common.h"
 
 #define MAX_SEQ_LEN 100000
@@ -41,11 +43,8 @@
 #ifdef DBG
 size_t _ntrials = 0;
 size_t _nmatches = 0;
+size_t _nfound = 0;
 #endif
-
-enum Op {
-    MATCH = 0, INSERT, DELETE 
-};
 
 struct Vote {
     unsigned char A, C, G, T;
@@ -72,7 +71,6 @@ struct Vote {
             T = (T == 255 ? 255 : T+1);
     };
 }; 
-
 
 typedef unsigned char t_bseq;
 
@@ -105,6 +103,9 @@ size_t ref_len;
 t_bseq *ref_bin = NULL;
 char *ref_txt = NULL;
 
+char tmp[MAX_SEQ_LEN];
+seq_aligner aligner;
+
 // seedmap for reference sequence
 __gnu_cxx::hash_map< unsigned, std::list<int> > seedmap(1<<20);
 // vote against reference sequence
@@ -133,6 +134,31 @@ print_substr ( const char *pseq, int beg, int end )
     sprintf(fmt, "%%.%ds\n", end-beg);
     printf(fmt, pseq+beg);
 }		/* -----  end of function print substr  ----- */
+
+/* 
+ * ===  FUNCTION  ============================================================
+ *         Name:  select_ref
+ *  Description:  
+ * ===========================================================================
+ */
+    int
+select_ref ( const char *fname )
+{
+    std::ifstream fin(fname);
+    int qualtiy;
+    int best_idx, best_val = 100, best_len;
+    for (ls_it it = indices.begin(); fin >> qualtiy; ++it) {
+        int seq_len = get_seq_len(buf+*it);
+        if (seq_len < 2000) continue;
+        if (qualtiy < best_val 
+                || (qualtiy == best_val && seq_len > best_len)) {
+            best_val = qualtiy;
+            best_idx = *it;
+            best_len = seq_len;
+        }
+    }
+    return best_idx;
+}		/* -----  end of function select_ref  ----- */
 
 /* 
  * ===  FUNCTION  ============================================================
@@ -201,7 +227,6 @@ parse_pattern ( const char *pat )
     return dna_seq::encode(dnapat);
 }		/* -----  end of function parse_pattern  ----- */
 
-
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  build_seedmap
@@ -222,7 +247,6 @@ build_seedmap (  )
         if (seed & tseg) seedmap[seed & tseg].push_back(i);
     }
 }		/* -----  end of function build_seedmap  ----- */
-
 
 /* 
  * ===  FUNCTION  ============================================================
@@ -470,12 +494,46 @@ try_align ( t_bseq *seq, size_t pos, int dir)
 #ifdef DBG
     ++_ntrials;
 #endif
+
+    int seq_len = get_seq_len(seq);
+    dna_seq::bin2text(seq, tmp, seq_len+1); 
+    bool forward = dir == 1;
+    int s_offset = forward ? (pos<<4) : (pos<<4)+16-1;
+    int s_len = forward ? seq_len - s_offset : s_offset + 1;
+    seq_accessor pseq_acsr(tmp+s_offset, forward, s_len);
+
+    if (s_len < 200) return false;
+
     ls_it it = sit->second.begin();
     ls_it end = sit->second.end();
     for (; it != end; ++it) {
-        if (align(seq, pos, *it, dir))   
+        int r_offset = forward ? (*it) : (*it)+16-1;
+        int r_len = forward ? ref_len - s_offset : r_offset + 1;
+        if (r_len < 200) continue;
+        seq_accessor pref_acsr(ref_txt+r_offset, forward, r_len);
+        if (aligner.align(&pseq_acsr, &pref_acsr) > 0) { 
+            fprintf(stderr, "ref_ml = %d, seg_ml = %d\n", 
+                    aligner.ref_ml, aligner.seg_ml);
+            char fmt[100];
+            if (forward && _nfound < 20) {
+                sprintf(fmt, "%%.%ds\n", aligner.ref_ml);
+                printf(fmt, ref_txt+r_offset);
+                sprintf(fmt, "%%.%ds\n", aligner.seg_ml);
+                printf(fmt, tmp+s_offset);
+                fflush(stdout);
+                ++_nfound;
+            }
+            if (!forward && _nfound < 20) {
+                sprintf(fmt, "%%.%ds\n", aligner.ref_ml);
+                printf(fmt, ref_txt+r_offset-aligner.ref_ml+1);
+                sprintf(fmt, "%%.%ds\n", aligner.seg_ml);
+                printf(fmt, tmp+s_offset-aligner.seg_ml+1);
+                ++_nfound;
+            }
             return true;
+        }
     }
+
     return false;
 }		/* -----  end of function try_align  ----- */
 
@@ -534,14 +592,17 @@ main ( int argc, char *argv[] )
 
     // read binary sequence file and build index for all DNA sequences
     i_max_len = open_binary(argv[1], indices);
-    // set the longest DNA sequence as initial reference
+
+    // set the best DNA sequence as initial reference
+//    int iref = select_ref("src/quality.in");
     ls_it it = indices.begin();
-    ++it;
-    ++it;
-    ++it;
-    i_max_len = *indices.begin();
-    set_ref(buf+i_max_len, 1);
-    LOG("i_max_len: %d\n", i_max_len);
+    srand( (unsigned)time(0) );
+    for (int i = rand(); i > 0; --i)
+        ++it;
+    while (get_seq_len(buf + *it) > 5000 || get_seq_len(buf + *it) < 2000)
+        ++it;
+    set_ref(buf + *it, 1);
+//    LOG("i_max_len: %d\n", i_max_len);
     LOG("indices: size %d\n", indices.size());
     LOG("ref_len: %d\n", ref_len);
 
@@ -555,7 +616,7 @@ main ( int argc, char *argv[] )
 
     // find repeat
     int count = 0;
-    for (ls_it it = indices.begin(); it != indices.end(); ++it) {
+    for (it = indices.begin(); it != indices.end(); ++it) {
         if (*it == i_max_len) continue;
         seq = buf + *it;
         seq_len = (*((unsigned*)seq) >> 4); // seq length in 32-word
