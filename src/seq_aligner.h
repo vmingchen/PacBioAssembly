@@ -25,7 +25,7 @@
 
 // ratio is the maximum bias between segment and reference
 //#define DEBUG_ALIGNER
-#define R 0.35
+#define R 0.4
 #define MAXN 20000
 #define MAXM (int)(MAXN*R)
 

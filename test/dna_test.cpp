@@ -24,6 +24,7 @@ TEST(dna_seq, binary) {
     EXPECT_EQ(23, dna_seq::bin2text(bin_buf, txt_buf, 41));
     EXPECT_STREQ(dna_str, txt_buf);
     EXPECT_EQ(0x34DAB41B, dna_seq::seed_at(bin_buf, 0));
+    EXPECT_EQ(0xD068D36E, dna_seq::seed_at(bin_buf, 1));
     EXPECT_EQ(0x41A34DBB, dna_seq::seed_at(bin_buf, 2));
     EXPECT_EQ(0xAF058D36, dna_seq::seed_at(bin_buf, 7));
 }

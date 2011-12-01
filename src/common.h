@@ -26,4 +26,7 @@
 #define MAX(x, y) ((x > y) ? (x) : (y))
 #define MIN(x, y) ((x < y) ? (x) : (y))
 
+#define MAX_SEQ_LEN 100000
+typedef unsigned char t_bseq;
+
 #endif

@@ -31,14 +31,13 @@
 #include	"dna_seq.h"
 #include	"seq_aligner.h"
 #include	"common.h"
+#include	"ref_seq.h"
 
-#define MAX_SEQ_LEN 100000
 #define STRONG 3
 #define N_SEGMENT 100
 #define N_TRIAL 20
 #define MAX_PAT_LEN N_SEQ_WORD
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
-//#define get_seq_len(x) (*((unsigned *)x))
 
 #ifdef DBG
 size_t _ntrials = 0;
@@ -46,49 +45,6 @@ size_t _nmatches = 0;
 size_t _nfound = 0;
 #endif
 
-struct Vote {
-    unsigned char A, C, G, T;
-    Vote() : A(0), C(0), G(0), T(0) {};
-    Vote(char c) { add(C2I(c)); };
-    char get() {
-        if (A > C && A > G && A > T)
-            return 'A';
-        else if (C > A && C > G && C > T)
-            return 'C';
-        else if (G > A && G > C && G > T)
-            return 'G';
-        else
-            return 'T';
-    }
-    void add(int c) {
-        if (c == 0) 
-            A = (A == 255 ? 255 : A+1);
-        else if (c == 1)
-            C = (C == 255 ? 255 : C+1);
-        else if (c == 2)
-            G = (G == 255 ? 255 : G+1);
-        else
-            T = (T == 255 ? 255 : T+1);
-    };
-}; 
-
-typedef unsigned char t_bseq;
-
-struct Reference {
-    Reference(const t_bseq *pseq) {};
-    bool align(int rb, int re, const char *pseg, int sb, int se) {
-    };
-    void append(char *pseg, int len) {
-    };
-    void prepend(char *pseg, int len) {
-    };
-    bool contained(int pos) {
-        return pos >= pre && pos < post;
-    };
-    int beg, end, pre, post; 
-    char _buf[3*MAX_SEQ_LEN];
-    std::deque<Vote> consensus; 
-};
 
 // spaced seed
 unsigned seed = 0;
@@ -481,14 +437,13 @@ align ( t_bseq *seq, int ap_s, int ap_r, int dir )
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  try_align
- *  Description:  pos is index into seq in units of 16
+ *  Description:  pos is index into seq 
  * ===========================================================================
  */
     inline bool
 try_align ( t_bseq *seq, size_t pos, int dir)
 {
-    unsigned *pseg = (unsigned*)(seq + sizeof(unsigned));
-    sm_it sit = seedmap.find(pseg[pos] & seed);
+    sm_it sit = seedmap.find(dna_seq::seed_at(seq, pos) & seed);
     if (sit == seedmap.end()) return false;
 
 #ifdef DBG
@@ -498,7 +453,7 @@ try_align ( t_bseq *seq, size_t pos, int dir)
     int seq_len = get_seq_len(seq);
     dna_seq::bin2text(seq, tmp, seq_len+1); 
     bool forward = dir == 1;
-    int s_offset = forward ? (pos<<4) : (pos<<4)+16-1;
+    int s_offset = forward ? pos : pos+16-1;
     int s_len = forward ? seq_len - s_offset : s_offset + 1;
     seq_accessor pseq_acsr(tmp+s_offset, forward, s_len);
 
@@ -512,6 +467,7 @@ try_align ( t_bseq *seq, size_t pos, int dir)
         if (r_len < 200) continue;
         seq_accessor pref_acsr(ref_txt+r_offset, forward, r_len);
         if (aligner.align(&pseq_acsr, &pref_acsr) > 0) { 
+#ifdef DBG
             fprintf(stderr, "ref_ml = %d, seg_ml = %d\n", 
                     aligner.ref_ml, aligner.seg_ml);
             char fmt[100];
@@ -530,6 +486,7 @@ try_align ( t_bseq *seq, size_t pos, int dir)
                 printf(fmt, tmp+s_offset-aligner.seg_ml+1);
                 ++_nfound;
             }
+#endif
             return true;
         }
     }
@@ -597,12 +554,14 @@ main ( int argc, char *argv[] )
 //    int iref = select_ref("src/quality.in");
     ls_it it = indices.begin();
     srand( (unsigned)time(0) );
-    for (int i = rand(); i > 0; --i)
+    for (int i = rand() % indices.size(); i > 0; --i)
         ++it;
     while (get_seq_len(buf + *it) > 5000 || get_seq_len(buf + *it) < 2000)
         ++it;
     set_ref(buf + *it, 1);
-//    LOG("i_max_len: %d\n", i_max_len);
+
+//    set_ref(buf + i_max_len, 1);
+    LOG("i_max_len: %d\n", i_max_len);
     LOG("indices: size %d\n", indices.size());
     LOG("ref_len: %d\n", ref_len);
 
@@ -617,16 +576,16 @@ main ( int argc, char *argv[] )
     // find repeat
     int count = 0;
     for (it = indices.begin(); it != indices.end(); ++it) {
-        if (*it == i_max_len) continue;
+//        if (*it == i_max_len) continue;
         seq = buf + *it;
-        seq_len = (*((unsigned*)seq) >> 4); // seq length in 32-word
-        if (seq_len == 0) {
-            LOG("segment too short! length: %d\n", get_seq_len(seq));
+        seq_len = get_seq_len(seq);
+        if (seq_len < N_TRIAL+16-1) {
+//            LOG("segment too short! length: %d\n", get_seq_len(seq));
             continue;
         }
 
         // number of trial 
-        for (size_t j = 0; j < MIN(seq_len, N_TRIAL); ++j) {
+        for (size_t j = 0; j < N_TRIAL; ++j) {
             if (try_align(seq, j, 1) || try_align(seq, seq_len-j-1, -1)) {
 #ifdef DBG
                 LOG("found %d\n", count+1);
