@@ -15,6 +15,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include	<ext/hash_map>
+
 #define DBG
 
 #ifdef DBG
@@ -23,10 +25,10 @@
 #define LOG(...) 
 #endif
 
-#define MAX(x, y) ((x > y) ? (x) : (y))
-#define MIN(x, y) ((x < y) ? (x) : (y))
-
 #define MAX_SEQ_LEN 100000
+
+typedef unsigned t_seed;
 typedef unsigned char t_bseq;
+typedef __gnu_cxx::hash_map< unsigned, std::list<int> > hash_table;
 
 #endif

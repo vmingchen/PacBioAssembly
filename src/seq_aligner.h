@@ -20,6 +20,7 @@
 #include	<math.h>
 #include	<limits.h>
 #include	<vector>
+#include	<algorithm>
 #include	"dna_seq.h"
 #include	"common.h"
 
@@ -61,11 +62,11 @@ public:
         if (pref->length() >= pseg->length()) { 
             seg_len = pseg->length();
             max_dst = 1 + (int)(seg_len * R);
-            ref_len = MIN(pref->length(), seg_len + max_dst);
+            ref_len = std::min(pref->length(), seg_len + max_dst);
         } else {
             ref_len = pref->length();
             max_dst = 1 + (int)(ref_len * R);
-            seg_len = MIN(pseg->length(), ref_len + max_dst);
+            seg_len = std::min(pseg->length(), ref_len + max_dst);
         }
 
         if (seg_len >= MAXN || max_dst >= MAXM) {
@@ -101,10 +102,10 @@ private:
     // translate index into rectangle matrix to index into diagonal stripe
     void init_cell() {
         for (int i=0; i<=seg_len; ++i) {
-            int beg = MAX(1, i - max_dst);
-            int end = MIN(ref_len, i + max_dst);
+            int beg = std::max(1, i - max_dst);
+            int end = std::min(ref_len, i + max_dst);
             for (int j=beg; j<=end; ++j) {
-                set_cost(i, j, MAX(i, j));
+                set_cost(i, j, std::max(i, j));
                 set_parent(i, j, i>j ? DELETE : (i==j ? MATCH : INSERT));
             } 
         }
@@ -116,8 +117,8 @@ private:
         for (int i=1; i<=seg_len; ++i) {
             int best_cost = seg_len;
             char c = pseg->next();
-            int beg = MAX(1, i - max_dst);
-            int end = MIN(ref_len, i + max_dst);
+            int beg = std::max(1, i - max_dst);
+            int end = std::min(ref_len, i + max_dst);
             pref->reset(beg-1);     // start from the beg-th element
             for (int j=beg; j<=end; ++j) {
                 char d = pref->next();
@@ -138,7 +139,7 @@ private:
                     set_parent(i, j, DELETE);
                     cost = t;
                 }
-                best_cost = MIN(cost, best_cost);
+                best_cost = std::min(cost, best_cost);
             }
 #ifdef DEBUG_ALIGNER
             LOG("i = %d, best_cost = %d\n", i, best_cost);

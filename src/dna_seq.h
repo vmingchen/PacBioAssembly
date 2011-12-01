@@ -46,18 +46,14 @@ public:
     bool empty(){ return true; };
     // read a record from the binary
     const unsigned* read(unsigned *plen) const { return NULL; };
-    static unsigned seed_at(unsigned char *pbin, int pos) {
-        unsigned char pseed[4];
-
+    static t_seed seed_at(unsigned char *pbin, int pos) {
         pbin += sizeof(unsigned);
-        unsigned *p = (unsigned*)(pbin + sizeof(unsigned));
+        if ((pos & 0x3) == 0) return *((unsigned*)(pbin+pos));
 
-        if ((pos & 0xf) == 0) return *((unsigned*)(pbin+pos));
-
+        unsigned char pseed[4];
         pbin += (pos >> 2);
-        unsigned ls = pos & 0x3;
-        unsigned rs = 0x4 - ls;
-        ls <<= 1; rs <<= 1;
+        unsigned ls = (pos & 0x3) << 1;
+        unsigned rs = 0x8 - ls;
         pseed[0] = (*pbin << ls) | (*++pbin >> rs);
         pseed[1] = (*pbin << ls) | (*++pbin >> rs);
         pseed[2] = (*pbin << ls) | (*++pbin >> rs);

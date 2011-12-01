@@ -25,7 +25,6 @@
 #include	<vector>
 #include	<deque>
 #include	<list>
-#include	<ext/hash_map>
 #include	<fstream>
 
 #include	"dna_seq.h"
@@ -45,7 +44,6 @@ size_t _nmatches = 0;
 size_t _nfound = 0;
 #endif
 
-
 // spaced seed
 unsigned seed = 0;
 
@@ -63,9 +61,8 @@ char tmp[MAX_SEQ_LEN];
 seq_aligner aligner;
 
 // seedmap for reference sequence
-__gnu_cxx::hash_map< unsigned, std::list<int> > seedmap(1<<20);
+hash_table seedmap(1<<20);
 // vote against reference sequence
-std::deque<Vote> votes;
 size_t ref_beg;
 size_t ref_end;
 
@@ -171,7 +168,7 @@ set_ref ( void *new_ref, int type )
 parse_pattern ( const char *pat )
 {
     char dnapat[MAX_PAT_LEN+1] = "AAAAAAAAAAAAAAAA";
-    size_t len = MIN(strlen(pat), MAX_PAT_LEN);
+    size_t len = std::min(strlen(pat), MAX_PAT_LEN);
 
 #ifdef DBG
     if (len < MAX_PAT_LEN) 
