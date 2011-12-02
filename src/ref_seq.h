@@ -44,9 +44,10 @@ public:
     base_vote selection;
     base_vote suppliment;
     int total; 
-    bool select(int c) { selection.add_code(c); ++total}
-    bool supply(int c) { suppliment.add_code(c); ++total}
-    bool invalid(double ratio) { return selection.max_vote() < ratio*total; }
+    void select(char c) { selection.add_char(c); ++total}
+    void ignore() { ++total; }
+    void supply(char c) { suppliment.add_char(c); ++total}
+    bool is_valid(double ratio) { return selection.max_vote() > ratio*total; }
 }
 
 class ref_seq {
@@ -86,12 +87,28 @@ public:
         if (forward) {
             std::deque<vote_box>::iterator it = consensus.begin();
             it += (beg + pos);
+            apply_edits(pedit, nedit, it);
+        } else {
+            std::deque<vote_box>::reverse_iterator it = consensus.rbegin();
+            it += (post - pos);
+            apply_edits(pedit, nedit, it);
         }
+    }
+private:
+    template <Iter> 
+    void apply_edits(edit *pedit, int nedit, Iter it) {
         for (int i = 0; i < nedit; ++i) {
             if (pedit->op == DELETE) {
-
+                it->ignore();
+                ++it;
+            } else if (pedit->op == MATCH) {
+                it->select(pedit->val);
+                ++it;
+                ++pedit;
+            } else if (pedit->op == INSERT) {
+                it->supply(pedit->val);
+                ++pedit;
             }
-            if (pedit->op == MATCH)
         }
     }
 
