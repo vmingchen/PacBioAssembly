@@ -16,6 +16,8 @@
 #define COMMON_H
 
 #include	<ext/hash_map>
+#include	<algorithm>
+#include	<list>
 
 #define DBG
 

@@ -14,6 +14,7 @@
 #ifndef DNA_SEQ_H
 #define DNA_SEQ_H
 #include	<assert.h>
+#include	"common.h"
 
 #define C2I(x) ((x == 'A') ? 0 : ((x == 'C') ? 1 : (x == 'G' ? 2 : 3)))
 #define I2C(x) ((x == 0) ? 'A' : ((x == 1) ? 'C' : (x == 2 ? 'G' : 'T')))

@@ -34,8 +34,13 @@ add_executable(
     test/aligner_test 
     test/aligner_test.cpp
 )
+add_executable(
+    test/ref_test 
+    test/ref_test.cpp
+)
 target_link_libraries(test/dna_test gtest gtest_main pthread)
 target_link_libraries(test/aligner_test gtest gtest_main pthread)
+target_link_libraries(test/ref_test gtest gtest_main pthread)
 enable_testing()
 add_test(
     NAME dna_test
@@ -44,4 +49,8 @@ add_test(
 add_test(
     NAME aligner_test
     COMMAND test/aligner_test
+)
+add_test(
+    NAME ref_test
+    COMMAND test/ref_test
 )

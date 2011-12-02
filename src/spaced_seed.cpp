@@ -146,14 +146,14 @@ set_ref ( void *new_ref, int type )
             handle_error("fail to alloc memory for ref_bin");
         assert(dna_seq::text2bin(ref_txt, ref_bin, blen) == blen);
     } else if (type == 3) {
-        char *ptxt = (char*)malloc(votes.size()+1);
-        if (ptxt == NULL)
-            handle_error("fail to alloc memory for string from ptxt");
-        ptxt[votes.size()] = '\0';
-        for (size_t i = 0; i < votes.size(); ++i)
-            ptxt[i] = votes[i].get();
-        ref_beg = 0;
-        set_ref(ptxt, 2);
+//        char *ptxt = (char*)malloc(votes.size()+1);
+//        if (ptxt == NULL)
+//            handle_error("fail to alloc memory for string from ptxt");
+//        ptxt[votes.size()] = '\0';
+//        for (size_t i = 0; i < votes.size(); ++i)
+//            ptxt[i] = votes[i].get();
+//        ref_beg = 0;
+//        set_ref(ptxt, 2);
     }
     return ;
 }		/* -----  end of function set_ref  ----- */
@@ -168,7 +168,7 @@ set_ref ( void *new_ref, int type )
 parse_pattern ( const char *pat )
 {
     char dnapat[MAX_PAT_LEN+1] = "AAAAAAAAAAAAAAAA";
-    size_t len = std::min(strlen(pat), MAX_PAT_LEN);
+    size_t len = std::min(strlen(pat), (size_t)MAX_PAT_LEN);
 
 #ifdef DBG
     if (len < MAX_PAT_LEN) 
