@@ -58,33 +58,32 @@ t_bseq *ref_bin = NULL;
 char *ref_txt = NULL;
 
 char tmp[MAX_SEQ_LEN];
-seq_aligner aligner;
+seq_aligner *paligner = NULL;
+ref_seq *pref = NULL;
 
 // seedmap for reference sequence
 hash_table seedmap(1<<20);
-// vote against reference sequence
-size_t ref_beg;
-size_t ref_end;
 
 typedef std::list<int>::iterator ls_it;
 typedef __gnu_cxx::hash_map< unsigned, std::list<int> >::iterator sm_it;
 
 inline unsigned get_seq_len(const t_bseq *x) { return *((unsigned *)x); }
 
+
 /* 
  * ===  FUNCTION  ============================================================
- *         Name:  print substr
+ *         Name:  print_seq
  *  Description:  
  * ===========================================================================
  */
     void
-print_substr ( const char *pseq, int beg, int end )
+print_seq ( seq_accessor *pac, int length )
 {
-    char fmt[20];
-    if (beg > end) std::swap(beg, end);
-    sprintf(fmt, "%%.%ds\n", end-beg);
-    printf(fmt, pseq+beg);
-}		/* -----  end of function print substr  ----- */
+    assert(pac->length() < length);
+    for (int i = 0; i < length; ++i) 
+        putc(pac.next());
+    putc('\n');
+}		/* -----  end of function print_seq  ----- */
 
 /* 
  * ===  FUNCTION  ============================================================
@@ -113,51 +112,6 @@ select_ref ( const char *fname )
 
 /* 
  * ===  FUNCTION  ============================================================
- *         Name:  set_ref
- *  Description:  set reference using binary (type 1), 
- *  text (type 2), 
- *  or votes (type 3)
- * ===========================================================================
- */
-    void
-set_ref ( void *new_ref, int type )
-{
-    if (type == 1) {
-        if (ref_bin != NULL) 
-            free(ref_bin);
-        ref_bin = (t_bseq*)new_ref;
-        ref_len = get_seq_len(ref_bin);
-        if (ref_txt != NULL)
-            free(ref_txt);
-        if ((ref_txt = (char*)malloc(ref_len + 1)) == NULL)
-            handle_error("fail to alloc memory for ref_txt");
-        assert(dna_seq::bin2text(ref_bin, ref_txt, ref_len+1) == ref_len); 
-    } else if (type == 2) {
-        if (ref_txt != NULL)
-            free(ref_txt);
-        ref_txt = (char*)new_ref;
-        ref_len = strlen(ref_txt);
-        if (ref_bin != NULL)
-            free(ref_bin);
-        size_t blen = (ref_len+4-1)/4 + sizeof(unsigned);
-        if ((ref_bin = (t_bseq*)malloc(blen)) == NULL)
-            handle_error("fail to alloc memory for ref_bin");
-        assert(dna_seq::text2bin(ref_txt, ref_bin, blen) == blen);
-    } else if (type == 3) {
-//        char *ptxt = (char*)malloc(votes.size()+1);
-//        if (ptxt == NULL)
-//            handle_error("fail to alloc memory for string from ptxt");
-//        ptxt[votes.size()] = '\0';
-//        for (size_t i = 0; i < votes.size(); ++i)
-//            ptxt[i] = votes[i].get();
-//        ref_beg = 0;
-//        set_ref(ptxt, 2);
-    }
-    return ;
-}		/* -----  end of function set_ref  ----- */
-
-/* 
- * ===  FUNCTION  ============================================================
  *         Name:  parse_pattern
  *  Description:  parse spaced seed pattern to a mask
  * ===========================================================================
@@ -180,24 +134,29 @@ parse_pattern ( const char *pat )
 
 /* 
  * ===  FUNCTION  ============================================================
- *         Name:  build_seedmap
- *  Description:  build (rebuild) seedmap for reference sequence
+ *         Name:  init
+ *  Description:  init pref, paligner, seed, seedmap
  * ===========================================================================
  */
     void
-build_seedmap (  )
+init ( t_bseq *bseq, const char *ptn_str )
 {
-    unsigned nseed = ref_len - N_SEQ_WORD;
+    // set reference
+    pref = new ref_seq(bseq);
+    assert(pref != NULL);
+    LOG("ref_len: %d\n", pref->length());
 
-    LOG("nseed: %d\n", nseed);
-    seedmap.clear();
+    // instantiate aligner
+    paligner = new seq_aligner(0.25);
+    assert(paligner != NULL);
 
-    for (size_t i = 0; i < nseed; ++i) {
-        unsigned tseg = dna_seq::encode(ref_txt + i);
-        // there are a lot of 'AAAAAAAAAAAAAAAA' segments, ignore them
-        if (seed & tseg) seedmap[seed & tseg].push_back(i);
-    }
-}		/* -----  end of function build_seedmap  ----- */
+    // parse spaced seed
+    seed = parse_pattern(ptn_str);
+    LOG("seed: %x\n", seed);
+
+    // build seedmap for reference sequences (the longest sequence)
+    LOG("seedmap (size: %d) done!\n", pref->get_seedmap(seedmap, seed));
+}		/* -----  end of function init  ----- */
 
 /* 
  * ===  FUNCTION  ============================================================
@@ -284,28 +243,36 @@ try_align ( t_bseq *seq, size_t pos, int dir)
     ls_it end = sit->second.end();
     for (; it != end; ++it) {
         int r_offset = forward ? (*it) : (*it)+16-1;
-        int r_len = forward ? ref_len - s_offset : r_offset + 1;
-        if (r_len < 200) continue;
-        seq_accessor pref_acsr(ref_txt+r_offset, forward, r_len);
-        if (aligner.align(&pseq_acsr, &pref_acsr) > 0) { 
-
+        if (pref->try_align(paligner, r_offset, &pseq_acsr)) { 
 #ifdef DBG
             fprintf(stderr, "ref_ml = %d, seg_ml = %d\n", 
-                    aligner.ref_ml, aligner.seg_ml);
+                    paligner->ref_ml, paligner->seg_ml);
             char fmt[100];
+            if (_nfound < 20) {
+                seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
+                print_seq(&ac_ref, paligner->seg_ml);
+            }
+
             if (forward && _nfound < 20) {
-                sprintf(fmt, "%%.%ds\n", aligner.ref_ml);
+
+
+                print_substr(pref->get_accessor(r_offset, forward).pt(0),
+                        0, paligner->ref_ml);
+
+                sprintf(fmt, "%%.%ds\n", paligner->ref_ml);
                 printf(fmt, ref_txt+r_offset);
-                sprintf(fmt, "%%.%ds\n", aligner.seg_ml);
+
+                sprintf(fmt, "%%.%ds\n", paligner->seg_ml);
                 printf(fmt, tmp+s_offset);
+
                 fflush(stdout);
                 ++_nfound;
             }
             if (!forward && _nfound < 20) {
-                sprintf(fmt, "%%.%ds\n", aligner.ref_ml);
-                printf(fmt, ref_txt+r_offset-aligner.ref_ml+1);
-                sprintf(fmt, "%%.%ds\n", aligner.seg_ml);
-                printf(fmt, tmp+s_offset-aligner.seg_ml+1);
+                sprintf(fmt, "%%.%ds\n", paligner->ref_ml);
+                printf(fmt, ref_txt+r_offset-paligner->ref_ml+1);
+                sprintf(fmt, "%%.%ds\n", paligner->seg_ml);
+                printf(fmt, tmp+s_offset-paligner->seg_ml+1);
                 ++_nfound;
             }
 #endif
@@ -380,21 +347,10 @@ main ( int argc, char *argv[] )
         ++it;
     while (get_seq_len(buf + *it) > 5000 || get_seq_len(buf + *it) < 2000)
         ++it;
-    set_ref(buf + *it, 1);
+    init(buf + *it, argv[2]);
 
-//    set_ref(buf + i_max_len, 1);
     LOG("i_max_len: %d\n", i_max_len);
     LOG("indices: size %d\n", indices.size());
-    LOG("ref_len: %d\n", ref_len);
-
-    // parse spaced seed
-    seed = parse_pattern(argv[2]);
-    LOG("seed: %x\n", seed);
-
-    // build seedmap for reference sequences (the longest sequence)
-    build_seedmap();
-    LOG("seedmap done\n");
-
     // find repeat
     int count = 0;
     for (it = indices.begin(); it != indices.end(); ++it) {

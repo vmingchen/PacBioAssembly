@@ -16,7 +16,7 @@
 #ifndef REF_SEQ_H
 #define REF_SEQ_H
 
-#include	<deque>
+#include	<list>
 
 #include	"dna_seq.h"
 #include	"seq_aligner.h"
@@ -24,7 +24,7 @@
 
 // the first edit cannot be INSERT
 template <class Iter> 
-void apply_edits(edit *pedit, int nedit, Iter it) {
+void apply_edits(edit *pedit, int nedit, Iter it, bool forward) {
     for (int i = 0; i < nedit; ++i) {
         if (pedit->op == DELETE) {
             it->ignore();
@@ -33,9 +33,9 @@ void apply_edits(edit *pedit, int nedit, Iter it) {
             it->select(pedit->val);
             ++it;
         } else if (pedit->op == INSERT) {
-            --it;
+            if (forward) --it;
             it->supply(pedit->val);
-            ++it;
+            if (forward) ++it;
         }
         ++pedit;
     }
@@ -50,6 +50,13 @@ public:
     void add_char(char  c) { ++acgt[C2I(c)]; }
     void add_code(int c) { ++acgt[c]; }
     void reset() { acgt[0] = acgt[1] = acgt[2] = acgt[3] = 0; }
+    void absorb(base_vote& other) {
+        acgt[0] += other.acgt[0];
+        acgt[1] += other.acgt[1];
+        acgt[2] += other.acgt[2];
+        acgt[3] += other.acgt[3];
+        other.reset();
+    }
     int max_vote() { 
         return std::max(acgt[0], std::max(acgt[1], 
                     std::max(acgt[2], acgt[3])));
@@ -63,6 +70,7 @@ public:
 
 class vote_box {
 public:
+    vote_box() : total(0) {}
     vote_box(char c) : selection(c), total(1) {}
     base_vote selection;
     base_vote suppliment;
@@ -70,6 +78,11 @@ public:
     void select(char c) { selection.add_char(c); ++total; }
     void ignore() { ++total; }
     void supply(char c) { suppliment.add_char(c); }
+    void split(vote_box *other) {
+        other->selection = suppliment;
+        other->total = total;
+        suppliment.reset();
+    }
     bool is_valid(double ratio) { return selection.max_vote() > ratio*total; }
     bool has_supply(double ratio) { return suppliment.max_vote() > ratio*total; } 
     char get_vote() { return selection.winner(); }
@@ -141,28 +154,45 @@ public:
     void evolve() {
         end = pre = beg = MAX_SEQ_LEN;
         char *p = txt_buf + beg;
-        std::deque<vote_box>::iterator it = consensus.begin();
-        while (it != consensus.end()) {
-            if (it->is_valid(0.5)) { *p++ = it->get_vote(); ++end; }
-            if (it->has_supply(0.5)) { *p++ = it->get_supply(); ++end; }
-            ++it;
+        vote_box vb;
+        std::list<vote_box>::iterator prev;
+        std::list<vote_box>::iterator next;
+        std::list<vote_box>::iterator cur = consensus.begin();
+        while (cur != consensus.end()) {
+            if (cur->has_supply(0.5)) {     // insert
+                cur->split(&vb);
+                next = cur;
+                ++next;
+                if (next == consensus.end()) 
+                    consensus.push_back(vb);
+                else
+                    consensus.insert(next, vb);
+            }
+            if (cur->is_valid(0.5)) {       // match 
+                *p++ = cur->get_vote(); 
+                ++end; 
+                ++cur;
+            } else {                        // delete
+                if (cur != consensus.begin()) { // has prev
+                    prev = cur;
+                    --prev;
+                    prev->suppliment.absorb(cur->selection);
+                } 
+                cur = consensus.erase(cur);
+            }
         }
         post = end;
-        consensus.clear();
-        p = txt_buf + beg;
-        for (int i = beg; i < end; ++i) 
-            consensus.push_back(vote_box(*p++));
     }
     // pos should be contained
     void elect(int pos, edit *pedit, int nedit, bool forward) {
         if (forward) {
-            std::deque<vote_box>::iterator it = consensus.begin();
+            std::list<vote_box>::iterator it = consensus.begin();
             advance(it, pos + beg - pre);
-            apply_edits(pedit, nedit, it);
+            apply_edits(pedit, nedit, it, forward);
         } else {
-            std::deque<vote_box>::reverse_iterator it = consensus.rbegin();
-            advance(it, post - beg - pos);
-            apply_edits(pedit, nedit, it);
+            std::list<vote_box>::reverse_iterator it = consensus.rbegin();
+            advance(it, post - beg - pos - 1);
+            apply_edits(pedit, nedit, it, forward);
         }
     }
 private:
@@ -173,7 +203,7 @@ private:
 
     char txt_buf[3*MAX_SEQ_LEN];
     unsigned char bin_buf[4+MAX_SEQ_LEN/N_SEQ_BYTE];
-    std::deque<vote_box> consensus; 
+    std::list<vote_box> consensus; 
 };
 
 #endif
