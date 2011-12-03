@@ -22,6 +22,7 @@
 #include	"seq_aligner.h"
 #include	"common.h"
 
+// the first edit cannot be INSERT
 template <class Iter> 
 void apply_edits(edit *pedit, int nedit, Iter it) {
     for (int i = 0; i < nedit; ++i) {
@@ -31,11 +32,12 @@ void apply_edits(edit *pedit, int nedit, Iter it) {
         } else if (pedit->op == MATCH) {
             it->select(pedit->val);
             ++it;
-            ++pedit;
         } else if (pedit->op == INSERT) {
+            --it;
             it->supply(pedit->val);
-            ++pedit;
+            ++it;
         }
+        ++pedit;
     }
 }
 
@@ -67,7 +69,7 @@ public:
     int total; 
     void select(char c) { selection.add_char(c); ++total; }
     void ignore() { ++total; }
-    void supply(char c) { suppliment.add_char(c); ++total; }
+    void supply(char c) { suppliment.add_char(c); }
     bool is_valid(double ratio) { return selection.max_vote() > ratio*total; }
     bool has_supply(double ratio) { return suppliment.max_vote() > ratio*total; } 
     char get_vote() { return selection.winner(); }
@@ -100,10 +102,27 @@ public:
     }
     bool contained(int pos) { return pos+beg >= pre && pos+beg < post; }
     unsigned length() { return end - beg; }
+    bool try_align(seq_aligner *paligner, int pos, seq_accessor *pac_seg) {
+        bool forward = pac_seg->is_forward();
+        seq_accessor ac_ref = get_accessor(pos, forward);
+        // don't mistake the order of the two parameters
+        // pac_seg now behave like a reference
+        if (paligner->align(&ac_ref, pac_seg) < 0) return false;
+        elect(pos, paligner->edits, paligner->nedit, forward);
+        if (paligner->seg_ml == ac_ref.length()) {
+            int add_len = pac_seg->length() - paligner->ref_ml;
+            if (forward) {
+                append(pac_seg->pt(paligner->ref_ml), add_len);
+            } else {
+                prepend(pac_seg->pt(0), add_len);
+            }
+        }
+        return true;
+    }
     seq_accessor get_accessor(int pos, bool forward) {
         assert(contained(pos));
         return seq_accessor(txt_buf + beg + pos, forward, 
-                forward ? post-beg-pos : pos+beg-pre);
+                forward ? post-beg-pos : pos+beg-pre+1);
     }
     /* *
      * build (rebuild) seedmap for reference sequence
@@ -120,15 +139,15 @@ public:
     };
     // seedmap will be invalidated once evolved
     void evolve() {
-        pre = beg = MAX_SEQ_LEN;
-        std::deque<vote_box>::iterator it = consensus.begin();
+        end = pre = beg = MAX_SEQ_LEN;
         char *p = txt_buf + beg;
+        std::deque<vote_box>::iterator it = consensus.begin();
         while (it != consensus.end()) {
-            if (it->is_valid(0.5)) *p++ = it->get_vote();
-            if (it->has_supply(0.5)) *p++ = it->get_supply();
+            if (it->is_valid(0.5)) { *p++ = it->get_vote(); ++end; }
+            if (it->has_supply(0.5)) { *p++ = it->get_supply(); ++end; }
             ++it;
         }
-        post = end = (p - (txt_buf + beg));
+        post = end;
         consensus.clear();
         p = txt_buf + beg;
         for (int i = beg; i < end; ++i) 

@@ -104,7 +104,7 @@ private:
     // translate index into rectangle matrix to index into diagonal stripe
     void init_cell() {
         for (int i=0; i<=seg_len; ++i) {
-            int beg = std::max(1, i - max_dst);
+            int beg = std::max(0, i - max_dst);
             int end = std::min(ref_len, i + max_dst);
             for (int j=beg; j<=end; ++j) {
                 set_cost(i, j, std::max(i, j));

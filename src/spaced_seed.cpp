@@ -288,6 +288,7 @@ try_align ( t_bseq *seq, size_t pos, int dir)
         if (r_len < 200) continue;
         seq_accessor pref_acsr(ref_txt+r_offset, forward, r_len);
         if (aligner.align(&pseq_acsr, &pref_acsr) > 0) { 
+
 #ifdef DBG
             fprintf(stderr, "ref_ml = %d, seg_ml = %d\n", 
                     aligner.ref_ml, aligner.seg_ml);

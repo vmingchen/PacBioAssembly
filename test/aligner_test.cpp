@@ -26,7 +26,6 @@ seq_aligner *paligner = NULL;
 
 class aligner_test : public testing::Test {
 protected:
-    virtual void SetUp() {};
     void edit_tester(seq_accessor *pref, seq_aligner *paligner) { 
         int j = 0;      // index into dna_ref
         for (int i = 0; i < paligner->nedit; ++i) {
@@ -78,6 +77,24 @@ TEST_F(aligner_test, overlay) {
     EXPECT_EQ(10, paligner->align(&seg, &ref));
     EXPECT_EQ(1, paligner->final_cost());
     edit_tester(&ref, paligner);
+}
+
+TEST_F(aligner_test, remove) {
+    seq_accessor ref(dna_ref, true, 10);
+    seq_accessor seg(dna_ref+1, true, 9);
+    EXPECT_EQ(10, paligner->align(&seg, &ref));
+    EXPECT_EQ(10, paligner->nedit);
+    EXPECT_EQ(INSERT, paligner->edits[0].op);
+    EXPECT_EQ(1, paligner->final_cost());
+    edit_tester(&ref, paligner);
+
+    ref.reset(0);
+    seg.reset(0);
+    EXPECT_EQ(9, paligner->align(&ref, &seg));
+    EXPECT_EQ(10, paligner->nedit);
+    EXPECT_EQ(DELETE, paligner->edits[0].op);
+    EXPECT_EQ(1, paligner->final_cost());
+    edit_tester(&seg, paligner);
 }
 
 TEST_F(aligner_test, sample) {

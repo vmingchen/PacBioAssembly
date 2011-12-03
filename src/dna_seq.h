@@ -149,6 +149,7 @@ class seq_accessor {
 public:
     seq_accessor(char *p, bool f, int l) : pdna(p), pcur(p), forward(f), len(l), cnt(0) {};
     int length() { return len; };
+    bool is_forward() { return forward; }
     bool has_more() { return cnt < len; };
     char next() { ++cnt; return forward ? *pcur++ : *pcur--; };
     void reset(int pos) { cnt = pos; pcur = forward ? pdna + pos: pdna - pos; };
