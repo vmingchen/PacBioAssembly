@@ -134,14 +134,15 @@ public:
         for (int i = beg; i < end; ++i) 
             consensus.push_back(vote_box(*p++));
     }
+    // pos should be contained
     void elect(int pos, edit *pedit, int nedit, bool forward) {
         if (forward) {
             std::deque<vote_box>::iterator it = consensus.begin();
-            it += (beg + pos);
+            advance(it, pos + beg - pre);
             apply_edits(pedit, nedit, it);
         } else {
             std::deque<vote_box>::reverse_iterator it = consensus.rbegin();
-            it += (post - pos);
+            advance(it, post - beg - pos);
             apply_edits(pedit, nedit, it);
         }
     }

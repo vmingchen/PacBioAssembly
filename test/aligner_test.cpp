@@ -44,20 +44,20 @@ protected:
 
 TEST_F(aligner_test, forward) {
     paligner = new seq_aligner();
-    seq_accessor ref1((char*)dna_ref, true, 12);
+    seq_accessor ref1((char*)dna_ref, true, 7);
     seq_accessor seg1((char*)dna_seg1, true, 6);
     EXPECT_LE(6, paligner->align(&seg1, &ref1));
     EXPECT_GE(7, paligner->align(&seg1, &ref1));
     EXPECT_EQ(2, paligner->final_cost());
     edit_tester(&ref1, paligner);
 
-    seq_accessor ref2((char*)dna_ref, true, 12);
+    seq_accessor ref2((char*)dna_ref, true, 8);
     seq_accessor seg2((char*)dna_seg1, true, 7);
     EXPECT_EQ(7, paligner->align(&seg2, &ref2));
     EXPECT_EQ(2, paligner->final_cost());
     edit_tester(&ref2, paligner);
 
-    seq_accessor ref3((char*)dna_ref, true, 12);
+    seq_accessor ref3((char*)dna_ref, true, 8);
     seq_accessor seg3((char*)dna_seg3, true, 7);
     EXPECT_EQ(7, paligner->align(&seg3, &ref3));
     EXPECT_EQ(1, paligner->final_cost());

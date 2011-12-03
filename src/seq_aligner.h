@@ -26,9 +26,9 @@
 
 // ratio is the maximum bias between segment and reference
 //#define DEBUG_ALIGNER
-#define R 0.4
-#define MAXN 20000
-#define MAXM (int)(MAXN*R)
+#define MAXR 0.3
+#define MAXN 2000
+#define MAXM (int)(MAXN*MAXR)
 
 enum OP {
     MATCH = 1,
@@ -48,7 +48,9 @@ typedef struct {
 
 class seq_aligner {
 public:
-    seq_aligner() {};
+    seq_aligner() : R(MAXR) {};
+    seq_aligner(double r) : R(r) {};
+    double R;                   // ratio of difference allowed
     int seg_len;                // max possible length of match in segment
     int ref_len;                // max possible length of match in ref
     int max_dst;                // max distance allowed

@@ -33,4 +33,5 @@ typedef unsigned t_seed;
 typedef unsigned char t_bseq;
 typedef __gnu_cxx::hash_map< unsigned, std::list<int> > hash_table;
 
+
 #endif

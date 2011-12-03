@@ -69,9 +69,7 @@ size_t ref_end;
 typedef std::list<int>::iterator ls_it;
 typedef __gnu_cxx::hash_map< unsigned, std::list<int> >::iterator sm_it;
 
-inline void swap(int &a, int &b) { int t = a; a = b; b = t; }
 inline unsigned get_seq_len(const t_bseq *x) { return *((unsigned *)x); }
-
 
 /* 
  * ===  FUNCTION  ============================================================
@@ -83,7 +81,7 @@ inline unsigned get_seq_len(const t_bseq *x) { return *((unsigned *)x); }
 print_substr ( const char *pseq, int beg, int end )
 {
     char fmt[20];
-    if (beg > end) swap(beg, end);
+    if (beg > end) std::swap(beg, end);
     sprintf(fmt, "%%.%ds\n", end-beg);
     printf(fmt, pseq+beg);
 }		/* -----  end of function print substr  ----- */
@@ -256,180 +254,6 @@ match_point ( unsigned sv, int base, int dist )
 //    LOG("selected: %d\n", mp);
     return diff == ref_len ? -1 : mp;
 }		/* -----  end of function match_point  ----- */
-
-/* 
- * ===  FUNCTION  ============================================================
- *         Name:  align_seg
- *  Description:  
- * ===========================================================================
- */
-    bool
-align_seg ( const char *txt, int sb, int se, int rb, int re, int dir)
-{
-#ifdef NDBG
-    sb = sb + ((1 - dir) << 3);
-    se = se + ((1 + dir) << 3);
-    rb = rb + ((1 - dir) << 3);
-    re = re + ((1 + dir) << 3);
-#endif
-
-    if (dir == -1) {
-        sb += 16;
-        se += 16;
-        rb += 16;
-        re += 16;
-    }
-
-    if (se < sb) swap(sb, se);
-    if (re < rb) swap(rb, re);
-
-    int slen = se - sb;
-    int rlen = re - rb;
-
-    const char *ptxt = txt + sb;
-    const char *pref = ref_txt + rb;
-
-#ifdef DBG
-//    LOG("segment(%d, %d), reference(%d, %d)\n", sb, slen, rb, rlen);
-//    print_substr(txt, sb, se);
-//    print_substr(ref_txt, rb, re);
-#endif
-
-//    if (filter_seq(ptxt, slen, pref, rlen)) return false;
-
-//    slen += 1;
-//    rlen += 1;
-//    std::vector< std::vector<int> > m(slen, std::vector<int>(rlen, ref_len)); 
-//
-//    for (int i = 0; i < slen; ++i) m[i][0] = i;
-//    for (int j = 0; j < rlen; ++j) m[0][j] = j;
-//
-//    for (int i = 1; i < slen; ++i) {
-//        for (int j = 1; j < rlen; ++j) {
-//            int vm = m[i-1][j-1] + (1 - (ptxt[i-1] == pref[j-1]));
-//            int vd = m[i][j-1] + 1;
-//            int vi = m[i-1][j] + 1;
-//            if (vm < vd && vm < vi) {
-//                m[i][j] = vm;
-//            } 
-//            if (vd < vm && vd < vi) {
-//                m[i][j] = vd;
-//            }
-//            if (vi < vd && vi < vm) {
-//                m[i][j] = vi;
-//            }
-//        }
-//    }
-//
-//    if (m[slen-1][rlen-1] > 0.3*rlen) 
-//        return false;
-
-    /* 
-    int x = slen - 1;
-    int y = rlen - 1;
-    while (x > 0 && y > 0) {
-        if (x > 0 && y > 0 && m[x][y] == 
-                (m[x-1][y-1] + 1 - (ptxt[x-1] == pref[y-1]))) { 
-            votes[ref_beg + rb + y - 1].add(ptxt[x-1]);
-            --x;
-            --y;
-        } else if (x > 0 && m[x][y] == (m[x-1][y] + 1)) { 
-            --x;
-        } else {
-            --y;
-        }
-    }
-    */
-
-    return true;
-}		/* -----  end of function align_seg  ----- */
-
-/* 
- * ===  FUNCTION  ============================================================
- *         Name:  align
- *  Description:  ap_s, aligned point in segment, against ap_r in reference
- * ===========================================================================
- */
-    bool
-align ( t_bseq *seq, int ap_s, int ap_r, int dir )
-{
-    int seq_len = get_seq_len(seq);
-    int seq_len_in_word = seq_len / N_SEQ_WORD;
-    unsigned *pseg = (unsigned*)(seq + sizeof(unsigned));
-    char *ptxt = NULL;
-    bool mismatch = false;
-    size_t n_matched_seg = 0;       
-    size_t l_matched_seg = 0;       // length of aligned segments in word
-    int sb, rb, se, re; 
-
-    assert((ptxt = (char*)malloc(seq_len + 1)) != NULL);
-    assert(dna_seq::bin2text(seq, ptxt, seq_len+1) == seq_len);
-
-    // find segment of seq, that match segment of reference
-    se = sb = ap_s;
-    rb = ap_r;
-    int dist = 0;
-    do {
-        ++dist;
-        se += dir;
-        re = match_point(pseg[se], rb, (dist<<4)*dir);
-#ifdef NDBG
-        if (re != -1) { 
-            print_substr(ptxt, (sb<<4), (se<<4));
-            print_substr(ref_txt, rb, re);
-        }
-#endif
-//        if (re != -1 && align_seg(ptxt, sb<<4, se<<4, rb, re, dir)) { 
-        if (re != -1) { 
-            sb = se; 
-            rb = re;
-            dist = 0;
-            l_matched_seg += abs(se - sb);
-            ++n_matched_seg;
-        } 
-
-        if (dist > N_SEGMENT) {  
-            if (8*l_matched_seg < abs(se - ap_s)) 
-                mismatch = true;
-            else
-                sb = se;
-        }
-    } while (!mismatch && se > 0 && se < seq_len_in_word);
-
-    if (!mismatch && n_matched_seg > STRONG) {
-//        if (dir == 1) { 
-//            // prefix of seq match suffix of reference
-//            if ((seq_len-(sb<<4)) > (ref_len-rb) && n_matched_seg > STRONG) {  
-//                align_seg(ptxt, sb<<4, ref_len-rb+(sb<<4), rb, ref_len, dir);
-////                for (int i = ref_len-rb+sb; i < seq_len; ++i)
-////                    votes.push_back(Vote(ptxt[i]));
-////                print_substr(ptxt, ref_len-rb+(sb<<4), seq_len);
-//            } else {
-//                align_seg(ptxt, sb<<4, seq_len, rb, rb+seq_len-(sb<<4), dir);
-//            }
-//        } else { 
-//            // suffix of seq match prefix of reference
-//            if ((sb<<4) > rb && n_matched_seg > STRONG) {
-//                align_seg(ptxt, (sb<<4)-rb, (sb<<4)+16, 0, rb+16, dir);
-////                for (int i = 0; i < seq_len-rb; ++i)
-////                    votes.push_front(Vote(ptxt[i]));
-////                print_substr(ptxt, 0, (sb<<4)-rb);
-//                ref_beg += seq_len-rb;
-//            } else {
-//                align_seg(ptxt, 0, (sb<<4)+16, rb-(sb<<4), rb+16, dir);
-//            }
-//        }
-
-#ifdef DBG
-        print_substr(ptxt, ap_s, (sb<<4));
-        print_substr(ref_txt, ap_r, rb);
-        LOG("nseg: %d\n", n_matched_seg);
-#endif
-    }  
-
-    free(ptxt);
-    return !mismatch && n_matched_seg > STRONG;
-}		/* -----  end of function align  ----- */
 
 /* 
  * ===  FUNCTION  ============================================================
