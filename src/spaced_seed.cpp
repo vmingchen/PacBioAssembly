@@ -270,14 +270,14 @@ try_align ( seq_index &idx, size_t pos, int dir)
 #ifdef DBG
             fprintf(stderr, "ref_ml = %d, seg_ml = %d\n", 
                     paligner->matlen_a, paligner->matlen_b);
-//            if (_nfound < 20) {
-//                ac_seg.reset(0);
-//                seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
-//                print_seq(&ac_ref, paligner->matlen_a);
-//                print_seq(&ac_seg, paligner->matlen_b); 
-//                fflush(stdout);
-//                ++_nfound;
-//            }
+            if (_nfound < 20) {
+                ac_seg.reset(0);
+                seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
+                print_seq(&ac_ref, paligner->matlen_a);
+                print_seq(&ac_seg, paligner->matlen_b); 
+                fflush(stdout);
+                ++_nfound;
+            }
 #endif
             return true;
         }
@@ -358,7 +358,7 @@ main ( int argc, char *argv[] )
     LOG("indices: size %d\n", indices.size());
 
     // find repeat
-    for (int nround = 1; ; ++nround) { 
+    for (int nround = 1; nround <= 3; ++nround) { 
         int nmatches = 0;
         int count = 0;
         it = indices.begin();
@@ -393,6 +393,7 @@ main ( int argc, char *argv[] )
         if (nmatches == 0) break;
         pref->evolve();
         pref->get_seedmap(seedmap, seed);
+        LOG("new reference length: %d\n", pref->length());
     }
 
     seq_accessor ac_ref = pref->get_accessor(0, true); 

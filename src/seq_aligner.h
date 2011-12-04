@@ -103,13 +103,21 @@ private:
     int indel(char c) { return 1; };
     // translate index into rectangle matrix to index into diagonal stripe
     void init_cell() {
-        for (int i=0; i<=len_a; ++i) {
-            int beg = std::max(0, i - max_dst);
-            int end = std::min(len_b, i + max_dst);
-            for (int j=beg; j<=end; ++j) {
-                set_cost(i, j, std::max(i, j));
-                set_parent(i, j, i>j ? DELETE : (i==j ? MATCH : INSERT));
-            } 
+//        for (int i=0; i<=len_a; ++i) {
+//            int beg = std::max(0, i - max_dst);
+//            int end = std::min(len_b, i + max_dst);
+//            for (int j=beg; j<=end; ++j) {
+//                set_cost(i, j, std::max(i, j));
+//                set_parent(i, j, i>j ? DELETE : (i==j ? MATCH : INSERT));
+//            } 
+//        }
+        for (int i = 1; i <= max_dst; ++i) {
+            set_cost(i, 0, i);
+            set_parent(i, 0, DELETE);
+        }
+        for (int j = 1; j <= max_dst; ++j) {
+            set_cost(0, j, j);
+            set_parent(0, j, INSERT);
         }
         set_cost(0, 0, 0);
         set_parent(0, 0, 0);
@@ -125,7 +133,8 @@ private:
             for (int j=beg; j<=end; ++j) {
                 char d = seg_b->next();
                 int t; 
-                int cost = get_cost(i, j);
+//                int cost = get_cost(i, j);
+                int cost = MAX_SEQ_LEN;
                 if ((t = get_cost(i-1, j-1) + match(c, d)) < cost) {
                     set_cost(i, j, t);
                     set_parent(i, j, MATCH);
