@@ -27,7 +27,7 @@
 // ratio is the maximum bias between segment and reference
 //#define DEBUG_ALIGNER
 #define MAXR 0.3
-#define MAXN 2000
+#define MAXN 20000
 #define MAXM (int)(MAXN*MAXR)
 
 enum OP {
@@ -51,61 +51,61 @@ public:
     seq_aligner() : R(MAXR) {};
     seq_aligner(double r) : R(r) {};
     double R;                   // ratio of difference allowed
-    int seg_len;                // max possible length of match in segment
-    int ref_len;                // max possible length of match in ref
+    int len_a;                  // max possible length of match in seg_a
+    int len_b;                  // max possible length of match in seg_b
     int max_dst;                // max distance allowed
-    int seg_ml;                 // length of match in seg
-    int ref_ml;                 // length of match in ref
+    int matlen_a;               // length of match in seg_a
+    int matlen_b;               // length of match in seg_b
     state mat[MAXN][MAXM];      // DP matrix
     int nedit;                  // number of edits
-    edit edits[MAXN + MAXM];    // edits of transform pseg to pref[beg:end]
-    int align(seq_accessor *pseg, seq_accessor *pref) {
+    edit edits[MAXN + MAXM];// edits of transform seg_a to seg_b[beg:end]
+    int align(seq_accessor *seg_a, seq_accessor *seg_b) {
         // work out parameters
-        if (pref->length() >= pseg->length()) { 
-            seg_len = pseg->length();
-            max_dst = 1 + (int)(seg_len * R);
-            ref_len = std::min(pref->length(), seg_len + max_dst);
+        if (seg_b->length() >= seg_a->length()) { 
+            len_a = seg_a->length();
+            max_dst = 1 + (int)(len_a * R);
+            len_b = std::min(seg_b->length(), len_a + max_dst);
         } else {
-            ref_len = pref->length();
-            max_dst = 1 + (int)(ref_len * R);
-            seg_len = std::min(pseg->length(), ref_len + max_dst);
+            len_b = seg_b->length();
+            max_dst = 1 + (int)(len_b * R);
+            len_a = std::min(seg_a->length(), len_b + max_dst);
         }
 
-        if (seg_len >= MAXN || max_dst >= MAXM) {
-            LOG("segment too long: %d\n", seg_len);
+        if (len_a >= MAXN || max_dst >= MAXM) {
+            LOG("segment too long: %d\n", len_a);
             return -1;
         }
 
         init_cell();
 
-        if (!search(pseg, pref)) return -1;
+        if (!search(seg_a, seg_b)) return -1;
 
         goal_cell();
-        if (ref_ml < ref_len*(1-R)) return -1;
+        if (matlen_b < len_b*(1-R)) return -1;
         nedit = 0;
-        find_path(seg_ml, ref_ml, pref);
+        find_path(matlen_a, matlen_b, seg_b);
 
 #ifdef DEBUG_ALIGNER
-        print_matrix(pseg, pref);
-        printf("(%d, %d)\n", seg_ml, ref_ml);
-        printf("seg_len: %d, ref_len: %d\n", seg_len, ref_len);
+        print_matrix(seg_a, seg_b);
+        printf("(%d, %d)\n", matlen_a, matlen_b);
+        printf("len_a: %d, len_b: %d\n", len_a, len_b);
 #endif
 
-        return ref_ml;
+        return matlen_b;
     };
     int get_cost(int i, int j) { return mat[i][j-i+max_dst].cost; };
     void set_cost(int i, int j, int v) { mat[i][j-i+max_dst].cost = v; };
     int get_parent(int i, int j) { return mat[i][j-i+max_dst].parent; }
     void set_parent(int i, int j, int p) { mat[i][j-i+max_dst].parent = p;}
-    int final_cost() { return get_cost(seg_ml, ref_ml); }
+    int final_cost() { return get_cost(matlen_a, matlen_b); }
 private:
     int match(char c, char d) { return c != d; };
     int indel(char c) { return 1; };
     // translate index into rectangle matrix to index into diagonal stripe
     void init_cell() {
-        for (int i=0; i<=seg_len; ++i) {
+        for (int i=0; i<=len_a; ++i) {
             int beg = std::max(0, i - max_dst);
-            int end = std::min(ref_len, i + max_dst);
+            int end = std::min(len_b, i + max_dst);
             for (int j=beg; j<=end; ++j) {
                 set_cost(i, j, std::max(i, j));
                 set_parent(i, j, i>j ? DELETE : (i==j ? MATCH : INSERT));
@@ -114,16 +114,16 @@ private:
         set_cost(0, 0, 0);
         set_parent(0, 0, 0);
     };
-    bool search(seq_accessor *pseg, seq_accessor *pref) {
-        pseg->reset(0);     // start from the first
-        for (int i=1; i<=seg_len; ++i) {
-            int best_cost = seg_len;
-            char c = pseg->next();
+    bool search(seq_accessor *seg_a, seq_accessor *seg_b) {
+        seg_a->reset(0);     // start from the first
+        for (int i=1; i<=len_a; ++i) {
+            int best_cost = len_a;
+            char c = seg_a->next();
             int beg = std::max(1, i - max_dst);
-            int end = std::min(ref_len, i + max_dst);
-            pref->reset(beg-1);     // start from the beg-th element
+            int end = std::min(len_b, i + max_dst);
+            seg_b->reset(beg-1);     // start from the beg-th element
             for (int j=beg; j<=end; ++j) {
-                char d = pref->next();
+                char d = seg_b->next();
                 int t; 
                 int cost = get_cost(i, j);
                 if ((t = get_cost(i-1, j-1) + match(c, d)) < cost) {
@@ -155,44 +155,44 @@ private:
         return true;
     };
     void goal_cell() {
-        seg_ml = seg_len;
-        ref_ml = ref_len;
-        while (seg_ml > ref_len 
-                && get_cost(seg_ml-1, ref_ml) <= get_cost(seg_ml, ref_ml))
-            --seg_ml;
-        while (ref_ml > seg_len 
-                && get_cost(seg_ml, ref_ml-1) <= get_cost(seg_ml, ref_ml))
-            --ref_ml;
+        matlen_a = len_a;
+        matlen_b = len_b;
+        while (matlen_a > len_b && get_cost(matlen_a-1, matlen_b) 
+                <= get_cost(matlen_a, matlen_b))
+            --matlen_a;
+        while (matlen_b > len_a && get_cost(matlen_a, matlen_b-1) 
+                <= get_cost(matlen_a, matlen_b))
+            --matlen_b;
     };
-    void find_path(int i, int j, seq_accessor *pref) {
+    void find_path(int i, int j, seq_accessor *seg_b) {
         int p = get_parent(i, j);
         if (p == MATCH) {
-            find_path(i-1, j-1, pref);
+            find_path(i-1, j-1, seg_b);
             edits[nedit].op = MATCH;
-            edits[nedit].val = pref->at(j-1);
+            edits[nedit].val = seg_b->at(j-1);
             ++nedit;
         }
         if (p == INSERT) {
-            find_path(i, j-1, pref);
+            find_path(i, j-1, seg_b);
             edits[nedit].op = INSERT;
-            edits[nedit].val = pref->at(j-1);
+            edits[nedit].val = seg_b->at(j-1);
             ++nedit;
         } 
         if (p == DELETE) {
-            find_path(i-1, j, pref);
+            find_path(i-1, j, seg_b);
             edits[nedit].op = DELETE;
             ++nedit;
         }
     };
-    void print_matrix(seq_accessor *pseg, seq_accessor *pref) {
+    void print_matrix(seq_accessor *seg_a, seq_accessor *seg_b) {
         printf(" \t \t");
-        for (int j = 1; j <= ref_len; ++j) {
-            printf("%c\t", pref->at(j-1));
+        for (int j = 1; j <= len_b; ++j) {
+            printf("%c\t", seg_b->at(j-1));
         }
         printf("\n");
-        for (int i = 0; i <= seg_len; ++i) {
-            printf("%c\t", i == 0 ? ' ' : pseg->at(i-1));
-            for (int j = 0; j <= ref_len; ++j) {
+        for (int i = 0; i <= len_a; ++i) {
+            printf("%c\t", i == 0 ? ' ' : seg_a->at(i-1));
+            for (int j = 0; j <= len_b; ++j) {
                 if (j < i-max_dst || j > i+max_dst) 
                     printf("%d\t", -1);
                 else

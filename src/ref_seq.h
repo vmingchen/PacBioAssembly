@@ -122,12 +122,12 @@ public:
         // pac_seg now behave like a reference
         if (paligner->align(&ac_ref, pac_seg) < 0) return false;
         elect(pos, paligner->edits, paligner->nedit, forward);
-        if (paligner->seg_ml == ac_ref.length()) {
-            int add_len = pac_seg->length() - paligner->ref_ml;
+        if (paligner->matlen_a == ac_ref.length()) {
+            int add_len = pac_seg->length() - paligner->matlen_b;
             if (forward) {
-                append(pac_seg->pt(paligner->ref_ml), add_len);
+                append(pac_seg->pt(paligner->matlen_b), add_len);
             } else {
-                prepend(pac_seg->pt(0), add_len);
+                prepend(pac_seg->pt(pac_seg->length()-1), add_len);
             }
         }
         return true;
@@ -143,6 +143,7 @@ public:
     unsigned get_seedmap(hash_table &seedmap, t_seed sd_pat) {
         unsigned nseed = end - beg - N_SEQ_WORD;
         char *ptext = txt_buf + beg;
+        seedmap.clear();
         for (unsigned i = 0; i < nseed; ++i) {
             unsigned sd = dna_seq::encode(ptext++);
             // there are a lot of 'AAAAAAAAAAAAAAAA' segments, ignore them

@@ -27,7 +27,7 @@
 #define LOG(...) 
 #endif
 
-#define MAX_SEQ_LEN 100000
+#define MAX_SEQ_LEN 1000000
 
 typedef unsigned t_seed;
 typedef unsigned char t_bseq;
