@@ -16,12 +16,14 @@
 #include	<assert.h>
 #include	"common.h"
 
+//! convert DNA base to binary number
 #define C2I(x) ((x == 'A') ? 0 : ((x == 'C') ? 1 : (x == 'G' ? 2 : 3)))
+//! convert binary number to DNA base
 #define I2C(x) ((x == 0) ? 'A' : ((x == 1) ? 'C' : (x == 2 ? 'G' : 'T')))
 
-// number of sequnce in a word
+//! number of DNA bases in a word
 #define N_SEQ_WORD 16
-// number of sequnce in a byte
+//! number of DNA bases in a byte
 #define N_SEQ_BYTE 4
 
 static const char codes[4] = {'A', 'C', 'G', 'T'};

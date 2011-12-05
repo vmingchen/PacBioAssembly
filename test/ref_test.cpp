@@ -86,7 +86,7 @@ protected:
         sz = strlen(dna_txt);
         dna_seq::text2bin(dna_txt, bseg, 24);
         pref = new ref_seq(bseg);
-        paligner = new seq_aligner();
+        paligner = new t_aligner();
     }
     virtual void TearDown() {
         if (pref) delete pref;
@@ -94,7 +94,7 @@ protected:
     }
     int sz;
     ref_seq *pref;
-    seq_aligner *paligner;
+    t_aligner *paligner;
 };
 
 TEST_F(ref_test, basic) {

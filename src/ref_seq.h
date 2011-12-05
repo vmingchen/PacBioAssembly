@@ -5,7 +5,7 @@
  *         Author:  Ming Chen, brianchenming@gmail.com
  *        Created:  11/29/2011 12:19:14 AM
  *
- *    Description:  
+ *    Description:  sequence reference
  *
  *       Revision:  none
  *
@@ -115,12 +115,13 @@ public:
     }
     bool contained(int pos) { return pos+beg >= pre && pos+beg < post; }
     unsigned length() { return end - beg; }
-    bool try_align(seq_aligner *paligner, int pos, seq_accessor *pac_seg) {
+    bool try_align(t_aligner *paligner, int pos, seq_accessor *pac_seg) {
         bool forward = pac_seg->is_forward();
         seq_accessor ac_ref = get_accessor(pos, forward);
         // don't mistake the order of the two parameters
         // pac_seg now behave like a reference
         if (paligner->align(&ac_ref, pac_seg) < 0) return false;
+        if (paligner->matlen_a < OVERLAP_MIN) return false;
         elect(pos, paligner->edits, paligner->nedit, forward);
         if (paligner->matlen_a == ac_ref.length()) {
             int add_len = pac_seg->length() - paligner->matlen_b;
@@ -137,19 +138,29 @@ public:
         return seq_accessor(txt_buf + beg + pos, forward, 
                 forward ? post-beg-pos : pos+beg-pre+1);
     }
-    /* *
+    /**
      * build (rebuild) seedmap for reference sequence
-     * */
+     **/
     unsigned get_seedmap(hash_table &seedmap, t_seed sd_pat) {
-        unsigned nseed = end - beg - N_SEQ_WORD;
-        char *ptext = txt_buf + beg;
+        int len = end - beg;
+        int nmax = len - N_SEQ_WORD;
+        int nhead = std::min(nmax, MAX_READ_LEN);
         seedmap.clear();
-        for (unsigned i = 0; i < nseed; ++i) {
+        char *ptext = txt_buf + beg;
+        for (int i = 0; i < nhead; ++i) {
             unsigned sd = dna_seq::encode(ptext++);
             // there are a lot of 'AAAAAAAAAAAAAAAA' segments, ignore them
             if (sd & sd_pat) seedmap[sd & sd_pat].push_back(i);
         }
-        return nseed;
+
+        int ntail = std::min(len-MAX_READ_LEN-N_SEQ_WORD, MAX_READ_LEN);
+        ptext = txt_buf + end - N_SEQ_WORD;
+        for (int i = 0; i < ntail; ++i) {
+            unsigned sd = dna_seq::encode(ptext--);
+            if (sd & sd_pat) seedmap[sd & sd_pat].push_back(len-i-N_SEQ_WORD);
+        }
+
+        return nhead + (ntail < 0 ? 0 : ntail);
     };
     // seedmap will be invalidated once evolved
     void evolve() {

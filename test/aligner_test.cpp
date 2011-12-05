@@ -22,11 +22,11 @@ char dna_seg1[] = "CGTAAGC";
 char dna_seg2[] = "GTAACGGGTTAA";
 char dna_seg3[] = "TCGTAAC";
 
-seq_aligner *paligner = NULL;
+t_aligner *paligner = NULL;
 
 class aligner_test : public testing::Test {
 protected:
-    void edit_tester(seq_accessor *pref, seq_aligner *paligner) { 
+    void edit_tester(seq_accessor *pref, t_aligner *paligner) { 
         int j = 0;      // index into dna_ref
         for (int i = 0; i < paligner->nedit; ++i) {
             char op = paligner->edits[i].op;
@@ -42,7 +42,7 @@ protected:
 };
 
 TEST_F(aligner_test, forward) {
-    paligner = new seq_aligner();
+    paligner = new t_aligner();
     seq_accessor ref1((char*)dna_ref, true, 7);
     seq_accessor seg1((char*)dna_seg1, true, 6);
     EXPECT_LE(6, paligner->align(&seg1, &ref1));

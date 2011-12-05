@@ -38,7 +38,7 @@ main ( int argc, char *argv[] )
     std::string ref_str;
     std::string seg_str;
 
-    seq_aligner *paligner = new seq_aligner();
+    t_aligner *paligner = new t_aligner();
     while (cin >> ref_str >> seg_str) {
         seq_accessor ref((char*)ref_str.c_str(), true, ref_str.length());
         seq_accessor seg((char*)seg_str.c_str(), true, seg_str.length());

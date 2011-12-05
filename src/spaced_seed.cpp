@@ -33,8 +33,9 @@
 #include	"ref_seq.h"
 
 #define STRONG 3
+#define SEQ_THRESHOLD 500
 #define N_SEGMENT 100
-#define N_TRIAL 20
+#define N_TRIAL 32
 #define MAX_PAT_LEN N_SEQ_WORD
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
@@ -59,27 +60,26 @@ t_bseq *buf = NULL;
 std::list<seq_index> indices;  
 
 char tmp[MAX_SEQ_LEN];
-seq_aligner *paligner = NULL;
+t_aligner *paligner = NULL;
 ref_seq *pref = NULL;
 
 t_bseq *seg_bin; 
 char seg_txt[MAX_SEQ_LEN];
 int seg_len;
-int seg_id;
+int seg_id = -1;
 
 // seedmap for reference sequence
 hash_table seedmap(1<<20);
 
 typedef std::list<int>::iterator list_it;
 typedef std::list<seq_index>::iterator index_it;
-typedef __gnu_cxx::hash_map< unsigned, std::list<int> >::iterator sm_it;
 
 inline unsigned get_seq_len(const t_bseq *x) { return *((unsigned *)x); }
 
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  set_active_seg
- *  Description:  
+ *  Description:  set current segment of interest
  * ===========================================================================
  */
     void
@@ -170,7 +170,7 @@ init ( t_bseq *bseq, const char *ptn_str, double ratio )
     LOG("ref_len: %d\n", pref->length());
 
     // instantiate aligner
-    paligner = new seq_aligner(ratio);
+    paligner = new t_aligner(ratio);
     assert(paligner != NULL);
 
     // parse spaced seed
@@ -205,41 +205,9 @@ filter_seq ( const char *pa, int la, const char *pb, int lb )
 
 /* 
  * ===  FUNCTION  ============================================================
- *         Name:  match_point
- *  Description:  
- * ===========================================================================
- */
-    int
-match_point ( unsigned sv, int base, int dist )
-{
-    int mp = 0;
-    int diff = pref->length();
-
-    if (abs(dist) > 800) return -1;
-
-    sm_it it = seedmap.find(sv & seed);
-#ifdef NDBG
-    char seg[N_SEQ_WORD];
-    dna_seq::decode(sv & seed, seg);
-    LOG("%.16s\n", seg);
-#endif
-    if (it == seedmap.end()) 
-        return -1;
-    for (list_it it1 = it->second.begin(); it1 != it->second.end(); ++it1) {
-        int nd = abs(*it1 - base - dist);
-        if (8*nd <= abs(dist) && nd < diff) {
-            diff = nd;
-            mp = *it1;
-        }
-    }
-//    LOG("selected: %d\n", mp);
-    return diff == pref->length() ? -1 : mp;
-}		/* -----  end of function match_point  ----- */
-
-/* 
- * ===  FUNCTION  ============================================================
  *         Name:  try_align
- *  Description:  pos is index into seq 
+ *  Description:  try align segment to reference from postion at pos in
+ *  direction of dir. Return true if aligned. 
  * ===========================================================================
  */
     inline bool
@@ -260,7 +228,8 @@ try_align ( seq_index &idx, size_t pos, int dir)
     int s_len = forward ? seg_len - s_offset : s_offset + 1;
     seq_accessor ac_seg(seg_txt+s_offset, forward, s_len);
 
-    if (s_len < 50) return false;
+    // too short to justify overlap
+    if (s_len < OVERLAP_MIN) return false;       
 
     list_it it = sit->second.begin();
     list_it end = sit->second.end();
@@ -268,8 +237,6 @@ try_align ( seq_index &idx, size_t pos, int dir)
         int r_offset = forward ? (*it) : (*it)+16-1;
         if (pref->try_align(paligner, r_offset, &ac_seg)) { 
 #ifdef DBG
-            fprintf(stderr, "ref_ml = %d, seg_ml = %d\n", 
-                    paligner->matlen_a, paligner->matlen_b);
             if (_nfound < 20) {
                 ac_seg.reset(0);
                 seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
@@ -289,8 +256,9 @@ try_align ( seq_index &idx, size_t pos, int dir)
 /* 
  * ===  FUNCTION  ============================================================
  *         Name:  open_binary
- *  Description:  open binary sequence file, read into buf, build index of all
- *  sequences into indices, and return the index of the longest sequence. 
+ *  Description:  open binary sequence file, mmap to buf, build index of all
+ *  segments into indices, and return the index of the longest segment.
+ *  Segments too long or too short is ignored. 
  * ===========================================================================
  */
     size_t
@@ -311,10 +279,16 @@ open_binary ( const char *fname, std::list<seq_index> &indices )
     if ((buf = (t_bseq*)mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, 0)) == MAP_FAILED) 
         handle_error("mmap");
 
+    if (close(fd) != 0)
+        handle_error("close");
+
     int i = 0;
     for (size_t offset = 0; offset < len; ) {
-        indices.push_back(seq_index(i++, offset));
         size_t seq_len = *((unsigned*)(buf + offset));
+        // make sure segments in indices are not too short or too long
+        if (seq_len > SEQ_THRESHOLD && seq_len < MAX_READ_LEN) { 
+            indices.push_back(seq_index(i++, offset));
+        }
         if (seq_len > max_len) {
             max_len = seq_len;
             i_max_len = offset;
@@ -344,47 +318,40 @@ main ( int argc, char *argv[] )
 
     // set the best DNA sequence as initial reference
 //    int iref = select_ref("src/quality.in");
+
+    // pick up a random segment as the starting reference
     index_it it = indices.begin();
-//    srand( (unsigned)time(0) );
-//    for (int i = rand() % indices.size(); i > 0; --i)
-//        ++it;
-//    while (get_seq_len(buf + it->offset) > 5000 
-//            || get_seq_len(buf + it->offset) < 2000)
-//        ++it;
-//
+    srand( (unsigned)time(0) );
+    advance(it, rand() % indices.size());
     init(buf + it->offset, argv[2], argc == 3 ? MAXR : atof(argv[3]));
-
-    LOG("i_max_len: %d\n", i_max_len);
+    LOG("using %d as the initial reference.\n", it->id);
     LOG("indices: size %d\n", indices.size());
+//    LOG("i_max_len: %d\n", i_max_len);
 
-    // find repeat
-    for (int nround = 1; nround <= 3; ++nround) { 
+    for (int nround = 1; nround <= 10; ++nround) { 
         int nmatches = 0;
         int count = 0;
         it = indices.begin();
         LOG("--------------- round %d ---------\n", nround);
         while (it != indices.end()) {
-    //        if (*it == i_max_len) continue;
             bool found = 0;
             unsigned slen = get_seq_len(buf + it->offset);
-            if (slen < N_TRIAL+16-1) {
-                LOG("segment too short! length: %d\n", slen);
-                continue;
-            }
-
             // number of trial 
             for (size_t j = 0; j < N_TRIAL; ++j) {
+                // try both forward and backward
                 if (try_align(*it, j, 1) || try_align(*it, slen-j-16, -1)) {
-                    found = 0;
+                    found = 1;
 #ifdef DBG
-                    LOG("found %d\n", it->id);
+                    LOG("found %d at cost %d:\tref_ml=%d,\tseg_ml=%d\n",
+                            it->id, paligner->final_cost(), 
+                            paligner->matlen_a, paligner->matlen_b);
 #endif
                     ++nmatches;
                     break;
                 }
             }
             it = found ? indices.erase(it) : ++it;
-            if (!(++count & 0xFFF)) LOG("%d sequences processed\n", count);
+            if (!(++count & 0xFFFF)) LOG("%d sequences processed\n", count);
         }
 #ifdef DBG
         LOG("#trials: %d\n", _ntrials);
@@ -396,6 +363,7 @@ main ( int argc, char *argv[] )
         LOG("new reference length: %d\n", pref->length());
     }
 
+    // print out final consensus
     seq_accessor ac_ref = pref->get_accessor(0, true); 
     print_seq(&ac_ref, pref->length());
 
