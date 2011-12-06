@@ -27,6 +27,12 @@ add_executable(
     src/dna_seq.h
 )
 add_executable(
+    src/binary_test
+    src/binary_test.cpp 
+    src/common.h 
+    src/dna_seq.h
+)
+add_executable(
     src/locator
     src/locator.cpp 
     src/common.h 

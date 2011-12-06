@@ -59,7 +59,6 @@ t_bseq *buf = NULL;
 // indices for binary DNA sequence
 std::list<seq_index> indices;  
 
-char tmp[MAX_SEQ_LEN];
 t_aligner *paligner = NULL;
 ref_seq *pref = NULL;
 
@@ -70,6 +69,7 @@ int seg_id = -1;
 
 // seedmap for reference sequence
 hash_table seedmap(1<<20);
+std::vector<unsigned> seeds; 
 
 typedef std::list<int>::iterator list_it;
 typedef std::list<seq_index>::iterator index_it;
@@ -162,7 +162,7 @@ parse_pattern ( const char *pat )
  * ===========================================================================
  */
     void
-init ( t_bseq *bseq, const char *ptn_str, double ratio )
+init ( t_bseq *bseq, const char *seed_file, double ratio )
 {
     // set reference
     pref = new ref_seq(bseq);
@@ -174,11 +174,16 @@ init ( t_bseq *bseq, const char *ptn_str, double ratio )
     assert(paligner != NULL);
 
     // parse spaced seed
-    seed = parse_pattern(ptn_str);
-    LOG("seed: %x\n", seed);
+    FILE *fp = fopen(seed_file, "r");
+    if (fp == NULL) 
+        handle_error("failed to open seedfile");
 
-    // build seedmap for reference sequences (the longest sequence)
-    LOG("seedmap (size: %d) done!\n", pref->get_seedmap(seedmap, seed));
+    char ptn_str[1024];
+    while (fscanf(fp, "%s", ptn_str) != EOF) {
+        seeds.push_back(parse_pattern(ptn_str));
+        LOG("%s: %08x\n", ptn_str, seeds.back());
+    }
+    fclose(fp);
 }		/* -----  end of function init  ----- */
 
 /* 
@@ -237,14 +242,14 @@ try_align ( seq_index &idx, size_t pos, int dir)
         int r_offset = forward ? (*it) : (*it)+16-1;
         if (pref->try_align(paligner, r_offset, &ac_seg)) { 
 #ifdef DBG
-            if (_nfound < 20) {
-                ac_seg.reset(0);
-                seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
-                print_seq(&ac_ref, paligner->matlen_a);
-                print_seq(&ac_seg, paligner->matlen_b); 
-                fflush(stdout);
-                ++_nfound;
-            }
+//            if (_nfound < 20) {
+//                ac_seg.reset(0);
+//                seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
+//                print_seq(&ac_ref, paligner->matlen_a);
+//                print_seq(&ac_seg, paligner->matlen_b); 
+//                fflush(stdout);
+//                ++_nfound;
+//            }
 #endif
             return true;
         }
@@ -328,11 +333,14 @@ main ( int argc, char *argv[] )
     LOG("indices: size %d\n", indices.size());
 //    LOG("i_max_len: %d\n", i_max_len);
 
-    for (int nround = 1; nround <= 10; ++nround) { 
+    for (int nround = 1; nround <= 20; ++nround) { 
         int nmatches = 0;
         int count = 0;
         it = indices.begin();
         LOG("--------------- round %d ---------\n", nround);
+        LOG("seed: %08x\n", (seed = seeds[rand() % seeds.size()]));
+        LOG("seedmap size: %d\n", pref->get_seedmap(seedmap, seed));
+        LOG("reference length: %d\n", pref->length());
         while (it != indices.end()) {
             bool found = 0;
             unsigned slen = get_seq_len(buf + it->offset);
@@ -359,13 +367,10 @@ main ( int argc, char *argv[] )
 #endif
         if (nmatches == 0) break;
         pref->evolve();
-        pref->get_seedmap(seedmap, seed);
-        LOG("new reference length: %d\n", pref->length());
+        // print out consensus
+        seq_accessor ac_ref = pref->get_accessor(0, true); 
+        print_seq(&ac_ref, pref->length());
     }
-
-    // print out final consensus
-    seq_accessor ac_ref = pref->get_accessor(0, true); 
-    print_seq(&ac_ref, pref->length());
 
     return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */

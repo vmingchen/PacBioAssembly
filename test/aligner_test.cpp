@@ -110,9 +110,9 @@ TEST_F(aligner_test, sample) {
 
     fin >> ref_str >> seg_str;
     seq_accessor ref2((char*)ref_str.c_str(), 
-            false, ref_str.length());
+            true, ref_str.length());
     seq_accessor seg2((char*)seg_str.c_str(),  
-            false, seg_str.length());
+            true, seg_str.length());
     EXPECT_EQ(-1, paligner->align(&seg2, &ref2));
 }
 

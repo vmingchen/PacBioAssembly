@@ -5,7 +5,7 @@
  *         Author:  Ming Chen, brianchenming@gmail.com
  *        Created:  11/09/2011 11:18:52 PM
  *
- *    Description:  test binary_parser
+ *    Description:  test dna_seq
  *
  *       Revision:  none
  *
@@ -15,7 +15,7 @@
 #include	<stdlib.h>
 #include	<stdio.h>
 #include	<string.h>
-#include	"binary_parser.h"
+#include	"dna_seq.h"
 
 /* 
  * ===  FUNCTION  ============================================================
@@ -43,8 +43,8 @@ main ( int argc, char *argv[] )
 
     if (argv[1][0] == '0') {
         while (scanf("%s", pdna) != EOF) { 
-            blen = binary_parser::text2bin(pdna, binary, N);
-            tlen = binary_parser::bin2text(binary, text, N);
+            blen = dna_seq::text2bin(pdna, binary, N);
+            tlen = dna_seq::bin2text(binary, text, N);
             if (strcmp(pdna, text) != 0) { 
                 printf("Error:%s\n%s\n", pdna, text);
                 return EXIT_FAILURE;
@@ -55,9 +55,9 @@ main ( int argc, char *argv[] )
     if (argv[1][0] == '1') { 
         fp = fopen(argv[2], "wb");
         while (scanf("%s", pdna) != EOF) { 
-            blen = binary_parser::text2bin(pdna, binary, N);
+            blen = dna_seq::text2bin(pdna, binary, N);
             assert(blen == fwrite(binary, 1, blen, fp));
-            tlen = binary_parser::bin2text(binary, text, N);
+            tlen = dna_seq::bin2text(binary, text, N);
         }
         fclose(fp);
     }
@@ -69,7 +69,7 @@ main ( int argc, char *argv[] )
             tlen = *((unsigned*)p);
             blen = sizeof(unsigned) + (tlen+4-1)/4;
             fread(p + sizeof(unsigned), 1, blen - sizeof(unsigned), fp);
-            assert(tlen == binary_parser::bin2text(p, text, N));
+            assert(tlen == dna_seq::bin2text(p, text, N));
             printf("%s\n", text);
         }
         fclose(fp);
