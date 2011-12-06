@@ -36,7 +36,7 @@
 //! max ratio of difference (distance)
 #define MAXR 0.3
 //! min length of aligned region to justify overlap
-#define OVERLAP_MIN 32
+#define OVERLAP_MIN 64
 
 typedef unsigned t_seed;
 typedef unsigned char t_bseq;

@@ -91,9 +91,17 @@ public:
 
 class ref_seq {
 public:
-    ref_seq(const t_bseq *pseq) {
+    ref_seq(const t_bseq *pseq, bool lk = false) : locked(lk) {
         beg = pre = MAX_SEQ_LEN;
         end = post = beg + dna_seq::bin2text(pseq, txt_buf+beg, MAX_SEQ_LEN);
+        char *p = txt_buf + beg;
+        for (int i = beg; i < end; ++i)
+            consensus.push_back(vote_box(*p++));
+    };
+    ref_seq(const char *ptxt, int len, bool l) : locked(l) {
+        beg = pre = MAX_SEQ_LEN;
+        end = post = beg + len;
+        strncpy(txt_buf + beg, ptxt, len);
         char *p = txt_buf + beg;
         for (int i = beg; i < end; ++i)
             consensus.push_back(vote_box(*p++));
@@ -122,6 +130,7 @@ public:
         // pac_seg now behave like a reference
         if (paligner->align(&ac_ref, pac_seg) < 0) return false;
         if (paligner->matlen_a < OVERLAP_MIN) return false;
+        if (locked) return true;
         elect(pos, paligner->edits, paligner->nedit, forward);
         if (paligner->matlen_a == ac_ref.length()) {
             int add_len = pac_seg->length() - paligner->matlen_b;
@@ -164,6 +173,7 @@ public:
     };
     // seedmap will be invalidated once evolved
     void evolve() {
+        if (locked) return ;
         end = pre = beg = MAX_SEQ_LEN;
         char *p = txt_buf + beg;
         vote_box vb;
@@ -212,6 +222,7 @@ private:
     int end;        // end of current iteration
     int pre;        // extension before beg
     int post;       // extension after end
+    bool locked;    // prevent from vote and grow
 
     char txt_buf[3*MAX_SEQ_LEN];
     unsigned char bin_buf[4+MAX_SEQ_LEN/N_SEQ_BYTE];

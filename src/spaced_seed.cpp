@@ -35,7 +35,7 @@
 #define STRONG 3
 #define SEQ_THRESHOLD 500
 #define N_SEGMENT 100
-#define N_TRIAL 32
+#define N_TRIAL 50
 #define MAX_PAT_LEN N_SEQ_WORD
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
@@ -43,6 +43,17 @@
 size_t _ntrials = 0;
 size_t _nfound = 0;
 #endif
+
+const char *usage_str = "usage: %s [options] bin seedfile\n"
+    "options: [-r:d:m:t:lh]\n"
+    "   -h          Get help and usage.\n"
+    "   -r file     Use the string from file as starting reference.\n"
+    "               Without this option the problem will select a random\n"
+    "               segments as starting reference instead.\n"
+    "   -d ratio    Ratio of difference allowed.\n"
+    "   -m nround   Maximum number of round of iteration.\n"
+    "   -t ntrials  Number of seeding trial for each segment.\n"
+    "   -l          Lock reference during iteration.\n";
 
 class seq_index {
 public:
@@ -62,6 +73,7 @@ std::list<seq_index> indices;
 t_aligner *paligner = NULL;
 ref_seq *pref = NULL;
 
+// information of active segment
 t_bseq *seg_bin; 
 char seg_txt[MAX_SEQ_LEN];
 int seg_len;
@@ -70,6 +82,10 @@ int seg_id = -1;
 // seedmap for reference sequence
 hash_table seedmap(1<<20);
 std::vector<unsigned> seeds; 
+
+// max number of iteration round
+int max_round = INT_MAX;
+int max_trial = 32;
 
 typedef std::list<int>::iterator list_it;
 typedef std::list<seq_index>::iterator index_it;
@@ -162,10 +178,27 @@ parse_pattern ( const char *pat )
  * ===========================================================================
  */
     void
-init ( t_bseq *bseq, const char *seed_file, double ratio )
+init ( const char *ref_file, const char *seed_file, double ratio, bool l )
 {
+    FILE *fp;
+    char tmp[MAX_SEQ_LEN];
+
+    // init random function with a seed
+    srand( (unsigned)time(0) );
+
     // set reference
-    pref = new ref_seq(bseq);
+    if (strlen(ref_file) > 0) {     // from file
+        fp = fopen(ref_file, "r");
+        if (fp == NULL || fgets(tmp, MAX_SEQ_LEN, fp) == NULL)
+            handle_error("failed to open ref_file");
+        pref = new ref_seq(tmp, strlen(tmp), l);
+        fclose(fp);
+    } else {                        // from random-selected segment
+        index_it it = indices.begin();
+        advance(it, rand() % indices.size());
+        pref = new ref_seq(buf + it->offset, l);
+        LOG("%d selected as the initial reference.\n", it->id);
+    }
     assert(pref != NULL);
     LOG("ref_len: %d\n", pref->length());
 
@@ -174,15 +207,16 @@ init ( t_bseq *bseq, const char *seed_file, double ratio )
     assert(paligner != NULL);
 
     // parse spaced seed
-    FILE *fp = fopen(seed_file, "r");
+    fp = fopen(seed_file, "r");
     if (fp == NULL) 
         handle_error("failed to open seedfile");
 
     char ptn_str[1024];
-    while (fscanf(fp, "%s", ptn_str) != EOF) {
+    while (fgets(ptn_str, 1024, fp) != NULL) {
+        ptn_str[strlen(ptn_str)-1] = '\0';  // get rid of new-line 
         seeds.push_back(parse_pattern(ptn_str));
-        LOG("%s: %08x\n", ptn_str, seeds.back());
-    }
+        LOG("seed %s: %08x\n", ptn_str, seeds.back());
+    } 
     fclose(fp);
 }		/* -----  end of function init  ----- */
 
@@ -314,38 +348,66 @@ open_binary ( const char *fname, std::list<seq_index> &indices )
 main ( int argc, char *argv[] )
 { 
     size_t i_max_len;
+    int opt;
+    char ref_file[PATH_MAX] = {0};
+    double ratio = MAXR;
+    bool locked = false;
 
-    if (argc < 3) 
-        handle_error("usage: spaced_seed bin seed [dist_ratio]\n");
+    if (argc < 3) {
+        fprintf(stderr, usage_str, argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    while ((opt = getopt(argc, argv, "f:r:d:m:t:lh")) != -1) {
+        switch (opt) {
+            case 'h':
+                fprintf(stdout, usage_str, argv[0]);
+                return EXIT_SUCCESS;
+            case 'r':
+                strncpy(ref_file, optarg, PATH_MAX);
+                break;
+            case 'd':
+                ratio = atof(optarg);
+                break;
+            case 'l':
+                locked = true;
+                break;
+            case 'm':
+                max_round = atoi(optarg);
+                break;
+            case 't':
+                max_trial = atoi(optarg);
+                break;
+            default: /*  '?' */
+                fprintf(stderr, usage_str, argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
 
     // read binary sequence file and build index for all DNA sequences
-    i_max_len = open_binary(argv[1], indices);
+    i_max_len = open_binary(argv[optind], indices);
+    LOG("indices: size %d\n", indices.size());
+    LOG("number of seeding trial: %d\n", max_trial);
+//    LOG("i_max_len: %d\n", i_max_len);
 
     // set the best DNA sequence as initial reference
 //    int iref = select_ref("src/quality.in");
-
     // pick up a random segment as the starting reference
-    index_it it = indices.begin();
-    srand( (unsigned)time(0) );
-    advance(it, rand() % indices.size());
-    init(buf + it->offset, argv[2], argc == 3 ? MAXR : atof(argv[3]));
-    LOG("using %d as the initial reference.\n", it->id);
-    LOG("indices: size %d\n", indices.size());
-//    LOG("i_max_len: %d\n", i_max_len);
+    init(ref_file, argv[optind+1], ratio, locked);
 
-    for (int nround = 1; nround <= 20; ++nround) { 
-        int nmatches = 0;
-        int count = 0;
-        it = indices.begin();
+    for (int nround = 1; nround <= max_round; ++nround) { 
         LOG("--------------- round %d ---------\n", nround);
         LOG("seed: %08x\n", (seed = seeds[rand() % seeds.size()]));
         LOG("seedmap size: %d\n", pref->get_seedmap(seedmap, seed));
         LOG("reference length: %d\n", pref->length());
+        int nmatches = 0;
+        int count = 0;
+        index_it it = indices.begin();
         while (it != indices.end()) {
             bool found = 0;
             unsigned slen = get_seq_len(buf + it->offset);
             // number of trial 
-            for (size_t j = 0; j < N_TRIAL; ++j) {
+            for (size_t j = 0; j < max_trial; ++j) {
                 // try both forward and backward
                 if (try_align(*it, j, 1) || try_align(*it, slen-j-16, -1)) {
                     found = 1;
