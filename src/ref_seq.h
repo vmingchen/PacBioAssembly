@@ -54,14 +54,15 @@ public:
     base_vote() { reset(); }
 
     /**
-     * Constructor of an initial vote on a base. 
+     * Constructor of initial n votes on base c. 
      */
-    base_vote(char c) { reset(); add_char(c); }
+    base_vote(char c, int n = 1) { reset(); add_char(c, n); }
 
     /**
      * Add a preference on a base specified by its character [ACGT]. 
      **/
     void add_char(char  c) { ++acgt[C2I(c)]; }
+    void add_char(int c, int n) { acgt[C2I(c)] += n; }
 
     /**
      * Add a preference on a base specified by its code [0123]. 
@@ -116,9 +117,9 @@ public:
     vote_box() : total(0) {}
 
     /**
-     * Constructor with an initial vote. 
+     * Constructor with an initial n votes on c. 
      **/
-    vote_box(char c) : selection(c), total(1) {}
+    vote_box(char c, int n=1) : selection(c, n), total(1) {}
 
     /** 
      * Vote for base value. 
@@ -214,13 +215,13 @@ public:
     /**
      * Constructor of reference with text sequence. 
      * */
-    ref_seq(const char *ptxt, int len, bool l) : locked(l) {
+    ref_seq(const char *ptxt, int len, bool l, int w = 1) : locked(l) {
         beg = pre = MAX_SEQ_LEN;
         end = post = beg + len;
         strncpy(txt_buf + beg, ptxt, len);
         char *p = txt_buf + beg;
         for (int i = beg; i < end; ++i)
-            consensus.push_back(vote_box(*p++));
+            consensus.push_back(vote_box(*p++, w));
     };
 
     void append(char *pseg, int len) {

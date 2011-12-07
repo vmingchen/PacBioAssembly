@@ -47,7 +47,11 @@ size_t _nfound = 0;
 const char *usage_str = "usage: %s [options] bin seedfile\n"
     "options: [-f:r:d:m:t:lh]\n"
     "   -h          Get help and usage.\n"
-    "   -f file     Use the string from file as starting reference.\n"
+    "   -f file     Use the string from file as starting reference. Only\n"
+    "               the first 2 lines of the file read be read, the 1st\n" 
+    "               line is supposed to be the sequence, and the second\n"
+    "               should be an integer represents its weight (large\n"
+    "               integer means more weight). \n"
     "               Without this option the problem will select a random\n"
     "               segments as starting reference instead.\n"
     "   -r ratio    Ratio of difference (0.3 by default) allowed.\n"
@@ -193,7 +197,10 @@ init ( FILE *fp, const char *seed_file, double ratio, bool l )
     if (fp) {     // from file
         if (fgets(tmp, MAX_SEQ_LEN, fp) == NULL)
             handle_error("failed to open ref_file");
-        pref = new ref_seq(tmp, strlen(tmp), l);
+        int weight = 1;
+        fscanf(fp, "%d", &weight);
+        LOG("reference weight: %d\n", weight);
+        pref = new ref_seq(tmp, strlen(tmp), l, weight);
         fclose(fp);
     } else {                        // from random-selected segment
         index_it it = indices.begin();
@@ -399,9 +406,12 @@ main ( int argc, char *argv[] )
     // pick up a random segment as the starting reference
     init(fpref, argv[optind+1], ratio, locked);
 
+    int nfailure = 0;
     for (int nround = 1; nround <= max_round; ++nround) { 
+        // pick up a random seed if there is no failure
+        seed = nfailure == 0 ? seeds[rand() % seeds.size()] : seeds[nfailure-1];
         LOG("--------------- round %d ---------\n", nround);
-        LOG("seed: %08x\n", (seed = seeds[rand() % seeds.size()]));
+        LOG("seed: %08x\n", seed);
         LOG("seedmap size: %d\n", pref->get_seedmap(seedmap, seed));
         LOG("reference length: %d\n", pref->length());
         int nmatches = 0;
@@ -431,7 +441,11 @@ main ( int argc, char *argv[] )
         LOG("#trials: %d\n", _ntrials);
         LOG("#matches: %d\n", nmatches);
 #endif
-        if (nmatches == 0) break;
+        if (nmatches != 0) 
+            nfailure = 0;   // reset only if we have find some match
+        else if (++nfailure == seeds.size())    // stop if all seeds tried
+            break;
+
         pref->evolve();
         // print out consensus
         seq_accessor ac_ref = pref->get_accessor(0, true); 

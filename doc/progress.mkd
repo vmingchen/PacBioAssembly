@@ -1,8 +1,4 @@
 % PacBio Assembly
-% Ming Chen (mchen@cs.stonybrook.edu), 108319345 \
- Yunting Xia (yunting.xia@gmail.com), 108269572 \
- Xiaoshuai Yuan (joannaysx@hotmail.com), 106166174
-% 2011-11-17 
 
 # 1. Introduction
 Our team aims at assembling the genome of E-coli from PacBio's long sequence

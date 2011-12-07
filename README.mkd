@@ -32,14 +32,18 @@ Make sure it passes all test cases before you proceed.
 # Usage
 The main program is spaced_seed:
 
-    $ src/spaced_seed   
+    $ src/spaced_seed
     usage: src/spaced_seed [options] bin seedfile
     options: [-f:r:d:m:t:lh]
        -h          Get help and usage.
-       -f file     Use the string from file as starting reference.
+       -f file     Use the string from file as starting reference. Only
+                   the first 2 lines of the file read be read, the 1st
+                   line is supposed to be the sequence, and the second
+                   should be an integer represents its weight (large
+                   integer means more weight).
                    Without this option the problem will select a random
                    segments as starting reference instead.
-       -r ratio    Ratio of difference allowed.
+       -r ratio    Ratio of difference (0.3 by default) allowed.
        -d dumpfile Dump matched segments.
        -m nround   Maximum number of round of iteration.
        -t ntrials  Number of seeding trial for each segment.
