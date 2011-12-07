@@ -1,0 +1,61 @@
+# About
+This is a course project of Computational Biology at Stony Brook University. 
+http://www.cs.sunysb.edu/~skiena/549/
+
+The project aims at assembling the long sequences reads with high error rate
+from PacBio.
+http://www.pacbiodevnet.com/Share/Datasets/E-coli-Outbreak
+
+More details are available on the documents in doc/.
+
+# Install
+The program has been built and tested on 32 bit Linux. 
+
+    $ uname -a
+    Linux ming-laptop 2.6.32-33-generic #69-Ubuntu SMP ... i686 GNU/Linux
+    $ gcc -v
+    gcc version 4.4.3 (Ubuntu 4.4.3-4ubuntu5)
+
+The core code should be portable except the binary format. However, the author
+only have an old laptop with small memory. IO is slow and painful, so... 
+
+Cmake and Googletest are necessary to build and run it. Define an environment
+variable GOOGLE_TEST to the directory of the Googletest. 
+
+    $ export GOOGLE_TEST=/path/to/googletest
+    $ cmake .
+    $ make
+    $ make test
+
+Make sure it passes all test cases before you proceed.
+
+# Usage
+The main program is spaced_seed:
+
+    $ src/spaced_seed   
+    usage: src/spaced_seed [options] bin seedfile
+    options: [-f:r:d:m:t:lh]
+       -h          Get help and usage.
+       -f file     Use the string from file as starting reference.
+                   Without this option the problem will select a random
+                   segments as starting reference instead.
+       -r ratio    Ratio of difference allowed.
+       -d dumpfile Dump matched segments.
+       -m nround   Maximum number of round of iteration.
+       -t ntrials  Number of seeding trial for each segment.
+       -l          Lock reference during iteration.
+
+Use src/binary_test to build binary sequnce file from .fasta file:
+
+    $ src/binary_test
+    usage: src/binary_test option filename
+    options: 0 do in-memory checks for DNA text from stdin
+             1 read text input from stdin write to binary file
+             2 read binary file write text to stdout
+
+For example,
+
+    $ cat test/real_align.txt | src/binary_test 1 toy.bin
+    $ src/spaced_seed toy.bin seeds.txt
+
+Note: Use at your own risk and DO NOT use it for homeworks!
