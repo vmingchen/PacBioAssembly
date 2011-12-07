@@ -45,12 +45,13 @@ size_t _nfound = 0;
 #endif
 
 const char *usage_str = "usage: %s [options] bin seedfile\n"
-    "options: [-r:d:m:t:lh]\n"
+    "options: [-f:r:d:m:t:lh]\n"
     "   -h          Get help and usage.\n"
-    "   -r file     Use the string from file as starting reference.\n"
+    "   -f file     Use the string from file as starting reference.\n"
     "               Without this option the problem will select a random\n"
     "               segments as starting reference instead.\n"
-    "   -d ratio    Ratio of difference allowed.\n"
+    "   -r ratio    Ratio of difference (0.3 by default) allowed.\n"
+    "   -d dumpfile Dump matched segments.\n"
     "   -m nround   Maximum number of round of iteration.\n"
     "   -t ntrials  Number of seeding trial for each segment.\n"
     "   -l          Lock reference during iteration.\n";
@@ -87,6 +88,9 @@ std::vector<unsigned> seeds;
 int max_round = INT_MAX;
 int max_trial = 32;
 
+FILE *fpdump = NULL;
+FILE *fpref = NULL;
+
 typedef std::list<int>::iterator list_it;
 typedef std::list<seq_index>::iterator index_it;
 
@@ -111,18 +115,18 @@ set_active_seg ( seq_index &idx )
 
 /* 
  * ===  FUNCTION  ============================================================
- *         Name:  print_seq
+ *         Name:  dump_seq
  *  Description:  
  * ===========================================================================
  */
     void
-print_seq ( seq_accessor *pac, int length )
+dump_seq ( FILE *fp, seq_accessor *pac, int length )
 {
     assert(pac->length() >= length);
     for (int i = 0; i < length; ++i) 
-        putchar(pac->next());
-    putchar('\n');
-}		/* -----  end of function print_seq  ----- */
+        fputc(pac->next(), fp);
+    fputc('\n', fp);
+}		/* -----  end of function dump_seq  ----- */
 
 /* 
  * ===  FUNCTION  ============================================================
@@ -178,18 +182,16 @@ parse_pattern ( const char *pat )
  * ===========================================================================
  */
     void
-init ( const char *ref_file, const char *seed_file, double ratio, bool l )
+init ( FILE *fp, const char *seed_file, double ratio, bool l )
 {
-    FILE *fp;
     char tmp[MAX_SEQ_LEN];
 
     // init random function with a seed
     srand( (unsigned)time(0) );
 
     // set reference
-    if (strlen(ref_file) > 0) {     // from file
-        fp = fopen(ref_file, "r");
-        if (fp == NULL || fgets(tmp, MAX_SEQ_LEN, fp) == NULL)
+    if (fp) {     // from file
+        if (fgets(tmp, MAX_SEQ_LEN, fp) == NULL)
             handle_error("failed to open ref_file");
         pref = new ref_seq(tmp, strlen(tmp), l);
         fclose(fp);
@@ -275,16 +277,13 @@ try_align ( seq_index &idx, size_t pos, int dir)
     for (; it != end; ++it) {
         int r_offset = forward ? (*it) : (*it)+16-1;
         if (pref->try_align(paligner, r_offset, &ac_seg)) { 
-#ifdef DBG
-//            if (_nfound < 20) {
-//                ac_seg.reset(0);
-//                seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
-//                print_seq(&ac_ref, paligner->matlen_a);
-//                print_seq(&ac_seg, paligner->matlen_b); 
-//                fflush(stdout);
-//                ++_nfound;
-//            }
-#endif
+            if (fpdump) { 
+                seq_accessor ac_ref = pref->get_accessor(r_offset, forward);
+                dump_seq(fpdump, &ac_ref, paligner->matlen_a);
+                ac_seg.reset(0);
+                dump_seq(fpdump, &ac_seg, paligner->matlen_b); 
+                fflush(fpdump);
+            }
             return true;
         }
     }
@@ -349,9 +348,9 @@ main ( int argc, char *argv[] )
 { 
     size_t i_max_len;
     int opt;
-    char ref_file[PATH_MAX] = {0};
     double ratio = MAXR;
     bool locked = false;
+    char ref_file[PATH_MAX] = {0};
 
     if (argc < 3) {
         fprintf(stderr, usage_str, argv[0]);
@@ -363,10 +362,15 @@ main ( int argc, char *argv[] )
             case 'h':
                 fprintf(stdout, usage_str, argv[0]);
                 return EXIT_SUCCESS;
-            case 'r':
-                strncpy(ref_file, optarg, PATH_MAX);
+            case 'f':
+                if ((fpref = fopen(optarg, "r")) == NULL)
+                    handle_error("failed to read ref_file"); 
                 break;
             case 'd':
+                if ((fpdump = fopen(optarg, "w")) == NULL) 
+                    handle_error("failed to create dump file");
+                break;
+            case 'r':
                 ratio = atof(optarg);
                 break;
             case 'l':
@@ -393,7 +397,7 @@ main ( int argc, char *argv[] )
     // set the best DNA sequence as initial reference
 //    int iref = select_ref("src/quality.in");
     // pick up a random segment as the starting reference
-    init(ref_file, argv[optind+1], ratio, locked);
+    init(fpref, argv[optind+1], ratio, locked);
 
     for (int nround = 1; nround <= max_round; ++nround) { 
         LOG("--------------- round %d ---------\n", nround);
@@ -431,7 +435,7 @@ main ( int argc, char *argv[] )
         pref->evolve();
         // print out consensus
         seq_accessor ac_ref = pref->get_accessor(0, true); 
-        print_seq(&ac_ref, pref->length());
+        dump_seq(stdout, &ac_ref, pref->length());
     }
 
     return EXIT_SUCCESS;

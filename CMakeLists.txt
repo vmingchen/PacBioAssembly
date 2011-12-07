@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 2.0)
 project(spaced_seed)
 include_directories(
-    "/home/ming/software/gtest-1.6.0"
-    "/home/ming/software/gtest-1.6.0/include"
+    "$ENV{GOOGLE_TEST}"
+    "$ENV{GOOGLE_TEST}/include"
     "${CMAKE_SOURCE_DIR}/src" 
     "${CMAKE_SOURCE_DIR}/test"
 )
 add_library(gtest
-    /home/ming/software/gtest-1.6.0/src/gtest-all.cc
+    $ENV{GOOGLE_TEST}/src/gtest-all.cc
 )
 add_library(gtest_main
-    /home/ming/software/gtest-1.6.0/src/gtest_main.cc
+    $ENV{GOOGLE_TEST}/src/gtest_main.cc
 )
 add_executable(
     src/spaced_seed 

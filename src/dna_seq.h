@@ -5,7 +5,8 @@
  *         Author:  Ming Chen, brianchenming@gmail.com
  *        Created:  11/08/2011 11:59:58 AM
  *
- *    Description:  
+ *    Description:  This file defines types related a DNA sequence
+ *    including dna_seq, seq_accessor and a couple of macros. 
  *
  *       Revision:  none
  *
@@ -39,6 +40,11 @@ struct txt_seq {
     char *data;
 };
 
+/**
+ * Represents a DNA sequence. It is most used for its static functions
+ * because in our progrom a DNA sequence is either a char pointer (text) or
+ * a unsigned char pointer (binary). 
+ **/
 class dna_seq {
 public:
 //    // create binary file from text file 
@@ -49,6 +55,10 @@ public:
     bool empty(){ return true; };
     // read a record from the binary
     const unsigned* read(unsigned *plen) const { return NULL; };
+
+    /**
+     * Return the seed at 'pos' of binary sequence pbin. 
+     **/
     static t_seed seed_at(unsigned char *pbin, int pos) {
         pbin += sizeof(unsigned);
         if ((pos & 0x3) == 0) return *((unsigned*)(pbin+pos));
@@ -64,9 +74,15 @@ public:
 
         return *((unsigned*)pseed);
     }
+
     static char value_at(unsigned char bv, int idx) {
         return codes[(bv >> ((~idx & 0x3) << 1)) & 0x3];
     }
+
+    /**
+     * Return the seed pointed by ptext, which is supposed to be at least
+     * 16-character-long. 
+     */
     static unsigned encode(const char *ptext) {
         unsigned tseg = 0;
         unsigned char *t = (unsigned char*)&tseg;
@@ -78,6 +94,10 @@ public:
 
         return tseg;
     };
+
+    /**
+     * Write back the DNA characters represents by code into ptext. 
+     **/
     static void decode(unsigned code, char *ptext) {
         unsigned char *t = (unsigned char*)&code;
         b2t(*t++, ptext, 4);
@@ -85,7 +105,11 @@ public:
         b2t(*t++, ptext+8, 4);
         b2t(*t++, ptext+12, 4);
     };
-    // convert text file to binary file, return length of result
+
+    /**
+     * Convert text sequence to binary sequence, return the length of the
+     * resulting binary sequence.  
+     */
     static unsigned text2bin(const char *ptext, unsigned char *pbin, unsigned buflen) {
         size_t tlen = strlen(ptext);
         size_t blen = sizeof(unsigned) + (tlen+4-1)/4; 
@@ -101,6 +125,11 @@ public:
         }
         return blen;
     };
+
+    /**
+     * Convert binary sequence to text sequence. Return length of
+     * sequence. 
+     **/
     static unsigned bin2text(const unsigned char *pbin, char *ptext, unsigned buflen) {
         size_t tlen = *((unsigned *)pbin);
         const unsigned char *pb = pbin + sizeof(unsigned);
@@ -147,15 +176,53 @@ private:
     }
 };
 
+/**
+ * An helper class facilitate the visit into a text sequence. It supports many
+ * ways of access like backward/forward iteration, position access and
+ * pointer access. 
+ *
+ **/
 class seq_accessor {
 public:
+    /**
+     * Construct a seq_accessor with *p be the underlying text sequence. The
+     * direction and the length of the accessor are defined by f and l. 
+     **/
     seq_accessor(char *p, bool f, int l) : pdna(p), pcur(p), forward(f), len(l), cnt(0) {};
+
+    /**
+     * Length of the underlying text sequence. 
+     **/
     int length() { return len; };
+
+    /**
+     * Determine the direction of the accessor. 
+     **/
     bool is_forward() { return forward; }
+
+    /**
+     * Check if there is more data when in iteration mode. 
+     **/
     bool has_more() { return cnt < len; };
+
+    /**
+     * Return the next DNA base in iteration mode.
+     **/
     char next() { ++cnt; return forward ? *pcur++ : *pcur--; };
+
+    /**
+     * Reset the number of read bases to 0. 
+     **/
     void reset(int pos) { cnt = pos; pcur = forward ? pdna + pos: pdna - pos; };
+
+    /**
+     * Directly access the base at pos i. 
+     **/
     char at(int i){ return forward ? *(pdna+i) : *(pdna-i); };
+
+    /**
+     * Return a pointer the base at pos i. 
+     **/
     char* pt(int i) { return forward ? (pdna+i) : (pdna-i); };
 private:
     char *pdna;

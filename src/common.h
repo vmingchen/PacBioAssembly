@@ -38,9 +38,24 @@
 //! min length of aligned region to justify overlap
 #define OVERLAP_MIN 64
 
+/**
+ * Typedef for a seed for alignment.  
+ **/
 typedef unsigned t_seed;
+
+/**
+ * Typedef for binary DNA sequence. 
+ **/
 typedef unsigned char t_bseq;
+
+/**
+ * Hash table used as seedmap. 
+ **/
 typedef __gnu_cxx::hash_map< unsigned, std::list<int> > hash_table;
+
+/**
+ * Iterator on seedmap.
+ * */
 typedef __gnu_cxx::hash_map< unsigned, std::list<int> >::iterator sm_it;
 
 #endif

@@ -47,7 +47,12 @@ typedef struct {
  * Sequence aligner class. Perform the dynamic programming procedure to align
  * one sequence against other. If the align function is called to align two
  * sequences, all information of the alignment in stored in it. The
- * information will be invalidated when align is called next time. 
+ * information will be invalidated when align is called next time. The
+ * aligner expect the two sequence to be similar to each other, the
+ * maximum difference (ratio) allowed is specified by the one parameter in the
+ * constructor. This class is parameterized with two integer template
+ * variables which are roughly the maximum length allowed and the maximum
+ * difference allowed between two sequences. 
  **/
 template <int MAXN, int MAXM>
 class seq_aligner {
@@ -57,7 +62,13 @@ class seq_aligner {
         int parent;      
     } state;
 public:
+    /**
+     * Default constructor. Use MAXR as the ratio of max difference. 
+     * */
     seq_aligner() : R(MAXR) {};
+    /**
+     * Use r as the ratio of max difference. 
+     * */
     seq_aligner(double r) : R(r) {};
     double R;                   //! ratio of difference allowed
     int len_a;                  //! max possible length of match in seg_a
@@ -70,7 +81,13 @@ public:
     state mat[MAXN][MAXM];      // DP matrix 
 
     /**
-     *
+     * Align two sequences defined by seq_accessor. It is the main
+     * interface to calss seq_aligner. It employes an early failure
+     * startegy to accelerate. So it is possible to miss two sequences whose
+     * distance are within the limit but their prefixs are two far away from
+     * each other. This function return -1 if fail, or the length of match if
+     * succeed. If the alignment is successful, detailed information about the
+     * alignment will be available as public-accessible class members.
      **/
     int align(seq_accessor *seg_a, seq_accessor *seg_b) {
         // work out parameters
@@ -106,11 +123,15 @@ public:
 
         return matlen_b;
     };
+    /**
+     * Get the cost of the alignment. It will return the correct value only
+     * after align is called and return true. 
+     * */
+    int final_cost() { return get_cost(matlen_a, matlen_b); }
     int get_cost(int i, int j) { return mat[i][j-i+max_dst].cost; };
     void set_cost(int i, int j, int v) { mat[i][j-i+max_dst].cost = v; };
     int get_parent(int i, int j) { return mat[i][j-i+max_dst].parent; }
     void set_parent(int i, int j, int p) { mat[i][j-i+max_dst].parent = p;}
-    int final_cost() { return get_cost(matlen_a, matlen_b); }
 private:
     int match(char c, char d) { return c != d; };
     int indel(char c) { return 1; };
@@ -162,8 +183,6 @@ private:
 #endif
             // early failure 
             if (i > 10 && get_cost(i, i) > i*R) {
-//            if (i > 10 && best_cost > i*R) {
-//                printf("failed at %d\n", i);
                 return false;
             }
         }
@@ -191,12 +210,6 @@ private:
                 }
             }
         }
-//        while (matlen_a > len_b && get_cost(matlen_a-1, matlen_b) 
-//                <= get_cost(matlen_a, matlen_b))
-//            --matlen_a;
-//        while (matlen_b > len_a && get_cost(matlen_a, matlen_b-1) 
-//                <= get_cost(matlen_a, matlen_b))
-//            --matlen_b;
     };
     void find_path(int i, int j, seq_accessor *seg_b) {
         int p = get_parent(i, j);
@@ -218,6 +231,9 @@ private:
             ++nedit;
         }
     };
+    /*
+     * Print DP matrix for debuging. 
+     */
     void print_matrix(seq_accessor *seg_a, seq_accessor *seg_b) {
         printf(" \t \t");
         for (int j = 1; j <= len_b; ++j) {
@@ -237,6 +253,10 @@ private:
     }
 };
 
+/**
+ * This is typedef of an instantialization of seq_aligner with default
+ * parameters. It is the actual aligner being used. 
+ * */
 typedef seq_aligner<MAX_READ_LEN+MAX_DIFF_LEN, MAX_DIFF_LEN> t_aligner;
 
 #endif

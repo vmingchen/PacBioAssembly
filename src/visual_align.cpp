@@ -5,7 +5,7 @@
  *         Author:  Ming Chen, brianchenming@gmail.com
  *        Created:  11/28/2011 01:34:45 PM
  *
- *    Description:  visualize alignment
+ *    Description:  Visualize the result of alignment. 
  *
  *       Revision:  none
  *

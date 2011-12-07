@@ -5,11 +5,10 @@
  *         Author:  Ming Chen, brianchenming@gmail.com
  *        Created:  11/29/2011 12:19:14 AM
  *
- *    Description:  sequence reference
+ *    Description:  Three classes are defined in this file: base_vote,
+ *    vote_box, ref_seq. 
  *
  *       Revision:  none
- *
- *
  * ===========================================================================
  */
 
@@ -41,15 +40,42 @@ void apply_edits(edit *pedit, int nedit, Iter it, bool forward) {
     }
 }
 
+/**
+ * Vote of DNA base class. It represents opinions from different segments
+ * overlapped at the same place. 
+ * */
 class base_vote {
 private:
     unsigned short acgt[4];
 public:
+    /**
+     * Constructor of empty vote.
+     * */
     base_vote() { reset(); }
+
+    /**
+     * Constructor of an initial vote on a base. 
+     */
     base_vote(char c) { reset(); add_char(c); }
+
+    /**
+     * Add a preference on a base specified by its character [ACGT]. 
+     **/
     void add_char(char  c) { ++acgt[C2I(c)]; }
+
+    /**
+     * Add a preference on a base specified by its code [0123]. 
+     **/
     void add_code(int c) { ++acgt[c]; }
+
+    /**
+     * Reset the vote to be empty. 
+     **/
     void reset() { acgt[0] = acgt[1] = acgt[2] = acgt[3] = 0; }
+
+    /**
+     * Add all information all another vote and then reset it. 
+     **/
     void absorb(base_vote& other) {
         acgt[0] += other.acgt[0];
         acgt[1] += other.acgt[1];
@@ -57,10 +83,18 @@ public:
         acgt[3] += other.acgt[3];
         other.reset();
     }
+
+    /**
+     * The maximum number of votes. 
+     **/
     int max_vote() { 
         return std::max(acgt[0], std::max(acgt[1], 
                     std::max(acgt[2], acgt[3])));
     }
+    
+    /**
+     * Base that with the maximum vote. 
+     **/
     char winner() {
         int mv = max_vote();
         return mv == acgt[0] ? 'A' 
@@ -68,29 +102,107 @@ public:
     }
 }; 
 
+/**
+ * A vote box at a particular place in the reference. It represents the
+ * reference's base value at one place. Every vote box actually has two
+ * base_vote, one for base value at that place, another for a possible
+ * suppliment right after that place. 
+ **/
 class vote_box {
 public:
+    /**
+     * Default constructor for an empty vote box.
+     **/
     vote_box() : total(0) {}
+
+    /**
+     * Constructor with an initial vote. 
+     **/
     vote_box(char c) : selection(c), total(1) {}
+
+    /** 
+     * Vote for base value. 
+     **/
     base_vote selection;
+
+    /**
+     * Vote for possible suppliment. 
+     **/
     base_vote suppliment;
+
+    /**
+     * How many segments have vote at this particular box (place). 
+     **/
     int total; 
+    
+    /**
+     * Add vote. This happens when there is a match or mismatch between the
+     * reference and the segment. 
+     **/
     void select(char c) { selection.add_char(c); ++total; }
+
+    /**
+     * Ignore vote. This happens when the segment want to delete this base
+     * in the reference.
+     **/
     void ignore() { ++total; }
+
+    /**
+     * Provide a suppliment. This happens when the segment want to insert
+     * another base right after. 
+     **/
     void supply(char c) { suppliment.add_char(c); }
+
+    /**
+     * Split suppliment to make it an separated vote_box.
+     **/
     void split(vote_box *other) {
         other->selection = suppliment;
         other->total = total;
         suppliment.reset();
     }
+
+    /**
+     * Check if the base with maximum vote is large than the ratio of total
+     * votes, which make it an effective result. 
+     **/
     bool is_valid(double ratio) { return selection.max_vote() > ratio*total; }
+
+    /**
+     * Check if there is any effective suppliment. 
+     * */
     bool has_supply(double ratio) { return suppliment.max_vote() > ratio*total; } 
+
+    /**
+     * Get the vote result. Call is_valid to make sure its return value makes
+     * sense. 
+     **/
     char get_vote() { return selection.winner(); }
+
+    /**
+     * Get the suppliment. Call has_supply to make sure its return value makes
+     * sense. 
+     **/
     char get_supply() { return suppliment.winner(); }
 };
 
+
+/**
+ * Reference sequence. DNA reads (segments) will aligned against it. Once
+ * aligned, the segment will express its opinion of the real base at
+ * overlapped places. If the read is aligned at the two boundaries of the
+ * reference, its unmatched part will be appended or prepened to the
+ * reference, so that the reference can grow. However, if the reference is in a
+ * locked state, the above-mentioned grow mechanism is disabled. The
+ * reference is stable within one iteration. Even its state will be
+ * changed during the alignment, but the changes are not disclosed to
+ * outside. After iteration, its state can be updated by 'evolve'. 
+ **/
 class ref_seq {
 public:
+    /**
+     * Constructor of reference with binary sequence.
+     * */
     ref_seq(const t_bseq *pseq, bool lk = false) : locked(lk) {
         beg = pre = MAX_SEQ_LEN;
         end = post = beg + dna_seq::bin2text(pseq, txt_buf+beg, MAX_SEQ_LEN);
@@ -98,6 +210,10 @@ public:
         for (int i = beg; i < end; ++i)
             consensus.push_back(vote_box(*p++));
     };
+
+    /**
+     * Constructor of reference with text sequence. 
+     * */
     ref_seq(const char *ptxt, int len, bool l) : locked(l) {
         beg = pre = MAX_SEQ_LEN;
         end = post = beg + len;
@@ -106,6 +222,7 @@ public:
         for (int i = beg; i < end; ++i)
             consensus.push_back(vote_box(*p++));
     };
+
     void append(char *pseg, int len) {
         memmove(txt_buf + post, pseg, len);
         post += len;
@@ -113,6 +230,7 @@ public:
             consensus.push_back(vote_box(*pseg++));
         }
     }
+
     void prepend(char *pseg, int len) {
         pre = pre - len;
         memmove(txt_buf + pre, pseg, len);
@@ -121,8 +239,22 @@ public:
             consensus.push_front(vote_box(*pseg--));
         }
     }
+    
+    /**
+     * Checked if there is anything at pos of reference. 
+     * */
     bool contained(int pos) { return pos+beg >= pre && pos+beg < post; }
+
+    /**
+     * Return the length of reference. 
+     * */
     unsigned length() { return end - beg; }
+
+    /*
+     * Try to align pac_seg against the reference starting from pos.
+     * Return true on success. The details of the alignment are available in
+     * paligner. 
+     */
     bool try_align(t_aligner *paligner, int pos, seq_accessor *pac_seg) {
         bool forward = pac_seg->is_forward();
         seq_accessor ac_ref = get_accessor(pos, forward);
@@ -142,13 +274,18 @@ public:
         }
         return true;
     }
+
+    /**
+     * Get accessor into the reference. 
+     * */
     seq_accessor get_accessor(int pos, bool forward) {
         assert(contained(pos));
         return seq_accessor(txt_buf + beg + pos, forward, 
                 forward ? post-beg-pos : pos+beg-pre+1);
     }
+
     /**
-     * build (rebuild) seedmap for reference sequence
+     * Build (rebuild) seedmap for reference sequence. 
      **/
     unsigned get_seedmap(hash_table &seedmap, t_seed sd_pat) {
         int len = end - beg;
@@ -171,7 +308,11 @@ public:
 
         return nhead + (ntail < 0 ? 0 : ntail);
     };
-    // seedmap will be invalidated once evolved
+
+    /**
+     * Refresh the reference to reflect updated state. The previous
+     * seedmap will be invalidated once evolved. 
+     * */
     void evolve() {
         if (locked) return ;
         end = pre = beg = MAX_SEQ_LEN;
@@ -205,6 +346,7 @@ public:
         }
         post = end;
     }
+
     // pos should be contained
     void elect(int pos, edit *pedit, int nedit, bool forward) {
         if (forward) {
