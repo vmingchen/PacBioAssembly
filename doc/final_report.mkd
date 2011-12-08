@@ -80,7 +80,7 @@ we should be careful since the length of overlapped region can be small. But
 overlap of a short region can happen frequently by accident. To avoid this
 situation, the alignment must be significant long to justify the overlap. 
 
-## Tradeoffs
+## 2.3. Tradeoffs
 In our algorithm, several tradeoffs have been made to balance between accuracy
 and speed. Firstly, in the dynamic programming process, it is reasonable to quit
 and report failure if intermidate optimal distance becomes significantly large.
@@ -122,7 +122,7 @@ are 3G after decompression and DNA sequences contribute half of the size,
     pattern. A class is created to provide interfaces of manipulating the binary
     format. 
 
-## Seedmap
+## 3.1. Seedmap
 The seedmap is implemented as a hash_map from the standard template library.
 Ideally, every time the reference gets updated by incorporating a new read, its
 seedmap should be refreshed as well. But it is very time-consuming, especially
@@ -150,38 +150,101 @@ base if it gets significant less votes at the end of iteration. The third case,
      overlaps detection is finished and partially tested, while the code for
      updating seedmap after alignment is drawing to an end. 
 
-## Program structure
+## 3.2. Program structure
 Besides seedmap, there are seven core classes as presented in Figure 1. *dna_seq*
 is an abstration of DNA sequence and *seq_accessor* capsulate the method to visit
 *dna_seq*. *seq_aligner* is the class responsible for aligning two sequences.
-ref_seq represents the reference it is also the place where *vote_box* resides.
+*ref_seq* represents the reference it is also the place where *vote_box* resides.
 *vote_box* is composed of two *base_vote*, one being selection and other being
 suppliment. 
 
-## Test
+![Class UML](class.pdf)\ 
+
+## 3.3. Testing
 Using GoogleTest, we have created comprehensive unit test cases for these
-classes. The binary format has also being tested on real data. We successfully
-converted 100M sequence into binary file and get the exact sequences back in
-text format. For the alignment, a *visual_align* has been implemented to
-visualize alignment for maually check. During the iteration, there is summary
-information for every alignment including the edit distance and the length of
-match in both reference and sequence. Therefore, we can check the output and
-make sure the alignment are working properly. Moreover, an option has been
-provided in our program to dump all aligned sequence during the whole process. 
+classes, especially *seq_aligner* and *ref_seq*. The binary format has being
+tested on real data. We successfully converted 100M sequence into binary file
+and get the exact sequences back in text format. The aligner has been tested on
+artificial data, long reads and CCS reads. For the alignment, a *visual_align*
+program has also been implemented to visualize alignment for manually check. 
 
-# 3. Experiment
-## 3.1. Overlap detection
-## 3.2. Experiment on corrected reads
-## 3.3. Experiment on error reads
+# 4. Experiment
+Experiments have been conducted to evaluate our program. Different data sets and
+different parameters have been used in our experiments.
 
-# 4. Future work
+## 4.1. Overlap detection
+Overlap detection is the most important part of our program. In the iteration,
+        there is summary information for every detected overlaps including the
+        edit distance and the length of match in both reference and sequence.
+        We can check this output and make sure the alignment are working
+        properly. A real example of the information is shown the following
+        table.  Moreover, an option has been provided in our program to dump all
+        detected overlapped segments during the whole process. The we can use
+        *visual_align* to manually examine the overlaps. All overlapped pairs
+        can be well aligned with each other. Some overlaps detected by our
+        program from real data are attached.
 
-# 4. Conclusion
-We have studied two possible methods to use the long fragments for DNA assembly.
-The key point for both methods is to eliminate errors using consensus of
-overlapped fragments. Thanks to the high coverage, it is likely that most errors
-will be corrected. As long as fragments overlaps can be detected efficiently, the
-assembly of corrected long fragments should be relatively easy. 
+Sequence ID     Distance        Match In Ref    Match In Segments
+-------------------------       ------------    -----------------
+found 161780 at cost 83:        ref_ml=370,     seg_ml=378
+found 191077 at cost 50:        ref_ml=232,     seg_ml=239
+found 28765 at cost 382:        ref_ml=1442,    seg_ml=1442
+found 136441 at cost 347:       ref_ml=1466,    seg_ml=1607
+found 206229 at cost 578:       ref_ml=2231,    seg_ml=2369
+found 237917 at cost 1658:      ref_ml=6119,    seg_ml=6047
+found 11519 at cost 69:         ref_ml=264,     seg_ml=264
+found 88452 at cost 173:        ref_ml=618,     seg_ml=618
+found 123619 at cost 1215:      ref_ml=4380,    seg_ml=4380
+
+The precision of overlaps can be controlled by parameters to our aligner and be
+verified by above-mentioned techniques. However, the recall of overlaps is more
+difficult to achieve but meanwhile more important. It determines the success to
+a great degree. There are experiments on both CCS reads and error reads. For CCS
+reads, the overlap detection works very well. In the first 10 rounds of
+iteration of one experiment, the average number of detected overlaps is 24.8.
+Near 25 overlaps in each iteration is great because it provide abundant chances
+to grow the reference and to correct errors. For error reads, the number of
+overlaps is much less. In the first 10 rounds of iteration of one experiment,
+         the average numbers of overlaps are respectively 3.3 and 6 when the
+         initial reference is from error reads and CCS reads. What is worse, the
+         number of overlaps decrease for error reads while keep stable for CCS
+         reads. 
+
+![Overlap Detection](overlap2.pdf)\ 
+
+
+## 4.2. Experiment on CCS reads
+When applied to CCS reads, the reference grows quickly and steadily. After 36
+rounds the reference becomes 251159-base-long. The average distance is only
+0.0142 per matched base. 
+
+## 4.3. Experiment on error reads
+When applied to error reads, its biggest difference between CCS reads is the
+number of overlaps is much smaller. When the iteration goes deeper, the risk
+of detecting 0 overlap increase. In that case, the iteration has to stop. By
+far, the longest sequence we have achieved is of length 110951. 
+
+To evaluate the effect of error correction, we would like to compare our result
+with the contig results provided by PacBio. However, even with a distance of
+10%, the complexity of this comparison is $0.1 \times 600000^2 = 3.6 \times
+10^10$, which is apparently prohibitive on our machine. Instead, we estimate the
+error rate of the assembly result by aligning the CCS reads against it. Because
+CCS reads are of very high accuracy, the distance between CCS reads and the
+assembly can be a good estimate. For the 110951-long-contig, the error rate is
+0.1639. It is slightly larger than the average, but the length of the contig is
+significantly larger than reads and the increase of error rate is relatively
+small. 
+
+![Reference growth on CCS reads](ccs.pdf)\ 
+
+# 5. Conclusion
+In our project, we implemented an assebly program that try to build the genome
+of E. coli from PacBio's long reads with high error rate. The critical point of
+the program is to find overlap. Then the seed-and-expand method is used to get a
+concensus from aligned segments, so that errors can be corrected. Our program is
+successful in detecting overlaps and expand the reference. However, to assemble
+the whole genome by only using the high error rate long reads, more overlaps
+should be found. 
 
 # References
 
